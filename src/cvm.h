@@ -34,7 +34,7 @@ typedef struct Inst
             unsigned int rt : 16;
         } _d_type;
         struct {
-            intptr_t imm : 32;
+            signed int imm : 32;
         } _i_type;
     } _info;
 } Inst;
@@ -43,8 +43,13 @@ typedef struct Inst
 #define i_rt  _info._d_type.rt
 #define i_imm _info._i_type.imm
 
-Inst cvm_inst_new_d_type(unsigned int type, unsigned int rd, unsigned int rs, unsigned int rt);
-Inst cvm_inst_new_i_type(unsigned int type, unsigned int rd, unsigned int imm);
+static inline Inst
+cvm_inst_new_d_type(unsigned int type, unsigned int rd, unsigned int rs, unsigned int rt)
+{ Inst ret; ret.type = type; ret.i_rd = rd; ret.i_rs = rs; ret.i_rt = rt; return ret; }
+
+static inline Inst
+cvm_inst_new_i_type(unsigned int type, unsigned int rd, unsigned int imm)
+{ Inst ret; ret.type = type; ret.i_rd = rd; ret.i_imm = imm; return ret; }
 
 typedef struct InstList
 {

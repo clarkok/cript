@@ -24,7 +24,9 @@ cvm_list_new(size_t capacity)
     size_t insts_size = cvm_list_insts_size(capacity);
 
     InstList *ret = malloc(sizeof(InstList) + insts_size);
-    memset((unsigned char *)(ret) + sizeof(InstList), 0, insts_size);
+    if (!ret) return NULL;
+
+    memset((char *)(ret) + sizeof(InstList), 0, insts_size);
 
     ret->capacity = capacity;
     ret->count = 0;
@@ -36,16 +38,17 @@ InstList *
 cvm_list_resize(InstList *list, size_t capacity)
 {
     size_t insts_size = cvm_list_insts_size(capacity);
-    size_t original_capacity = list->capacity;
+    size_t original_size = cvm_list_insts_size(list->capacity);
 
     list = realloc(list, sizeof(InstList) + insts_size);
-    if (capacity > original_capacity) {
+    if (capacity > list->capacity) {
         memset(
-            (unsigned char*)(list) + cvm_list_insts_size(original_capacity),
+            (char*)(list) + original_size + sizeof(InstList),
             0,
-            cvm_list_insts_size(capacity - original_capacity)
+            insts_size - original_size
         );
     }
+    list->capacity = capacity;
 
     return list;
 }
@@ -62,16 +65,27 @@ cvm_list_append(InstList *list, Inst inst)
 }
 
 void
-cvm_list_destory(InstList *list)
+cvm_list_destroy(InstList *list)
 { free(list); }
 
 VMState *
 cvm_state_new(InstList *inst_list)
 {
-    VMState *vm = malloc(sizeof(vm));
+    VMState *vm = malloc(sizeof(VMState));
+    if (!vm) return NULL;
+
     vm->inst_list = inst_list;
     vm->pc = 0;
     return vm;
+}
+
+void
+cvm_state_destroy(VMState *vm)
+{
+    if (vm->inst_list) {
+        cvm_list_destroy(vm->inst_list);
+    }
+    free(vm);
 }
 
 static inline void
@@ -85,13 +99,11 @@ cvm_get_register(VMState *vm, unsigned int reg)
 void
 cvm_state_run(VMState *vm)
 {
-    int running = 1;
-    while (running) {
+    for (;;) {
         Inst inst = vm->inst_list->insts[vm->pc++];
         switch (inst.type) {
             case I_HALT:
-                running = 0;
-                break;
+                return;
             case I_LI:
                 cvm_set_register(
                     vm, inst.i_rd,

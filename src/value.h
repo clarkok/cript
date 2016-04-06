@@ -18,6 +18,6 @@ value_to_int(Value val)
 
 static inline Value
 value_from_int(intptr_t value)
-{ Value ret; ret._int = value << 2; }
+{ Value ret; ret._int = value << 2; return ret; }
 
 #endif //CRIPT_VALUE_H

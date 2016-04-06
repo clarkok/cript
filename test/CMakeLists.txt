@@ -1,4 +1,7 @@
 enable_testing()
 
-add_executable(gtest_main)
-add_test(gtest_main gtest_main)
+include_directories(${cript_SOURCE_DIR}/src)
+include_directories(${cript_SOURCE_DIR}/test/cutest-1.5)
+
+add_executable(test_main cutest-1.5/CuTest.c test_main.c cvm_test.c)
+target_link_libraries(test_main libcript)
