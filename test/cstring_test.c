@@ -3,7 +3,7 @@
 //
 
 #include "CuTest.h"
-#include "cstring.h"
+#include "string_pool.h"
 
 void
 cstring_test_construct(CuTest *tc)

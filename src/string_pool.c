@@ -4,9 +4,10 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "list.h"
-#include "cstring.h"
+#include "string_pool.h"
 #include "hash_helper.h"
 
 #define STRING_PAGE_SIZE                4096
@@ -190,12 +191,14 @@ string_pool_insert_vec(StringPool **pool_ptr, const char *vec, size_t size)
         pool = *pool_ptr = _string_expand_pool(pool);
     }
 
-    CString *string = _string_allocate_in_pool(pool, size);
+    CString *string = _string_allocate_in_pool(pool, size + 1);
     string->length = size;
     memcpy(string->content, vec, size);
+    string->content[string->length] = 0;    // tailing zero
 
     _string_hash_insert(pool, hash, string);
 
     pool->size++;
     return string;
 }
+
