@@ -178,7 +178,6 @@ _string_allocate_in_pool(StringPool *pool, size_t size)
 CString *
 string_pool_insert_vec(StringPool **pool_ptr, const char *vec, size_t size)
 {
-    assert(size);
     assert(size < MAX_SHORT_STRING_LENGTH);
 
     StringPool *pool = *pool_ptr;

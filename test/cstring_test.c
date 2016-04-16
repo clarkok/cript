@@ -118,6 +118,29 @@ cstring_test_same_node(CuTest *tc)
     string_pool_destroy(uut);
 }
 
+void
+cstring_test_empty_string(CuTest *tc)
+{
+    StringPool *uut = string_pool_new();
+
+    CString *results[16];
+
+    int i;
+    for (i = 1; i < 16; ++i) {
+        results[i] = string_pool_insert_vec(&uut, (char*)&i, sizeof(int));
+    }
+
+    results[0] = string_pool_insert_vec(&uut, (char*)&i, 0);
+
+    for (i = 1; i < 16; ++i) {
+        CuAssertTrue(tc, results[i] == string_pool_insert_vec(&uut, (char*)&i, sizeof(int)));
+    }
+
+    CuAssertTrue(tc, results[0] == string_pool_find_vec(uut, NULL, 0));
+
+    string_pool_destroy(uut);
+}
+
 CuSuite *
 cstring_test_suite(void)
 {
@@ -129,6 +152,7 @@ cstring_test_suite(void)
     SUITE_ADD_TEST(suite, cstring_test_rehash);
     SUITE_ADD_TEST(suite, cstring_test_new_page);
     SUITE_ADD_TEST(suite, cstring_test_same_node);
+    SUITE_ADD_TEST(suite, cstring_test_empty_string);
 
     return suite;
 }
