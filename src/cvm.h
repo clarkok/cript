@@ -22,7 +22,7 @@ typedef struct VMState
     Value regs[65536];
 } VMState;
 
-VMState *cvm_state_new(InstList *inst_list);
+VMState *cvm_state_new(InstList *inst_list, StringPool *string_pool);
 void cvm_state_run(VMState *vm);
 void cvm_state_destroy(VMState *vm);
 

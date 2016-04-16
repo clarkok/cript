@@ -8,12 +8,12 @@
 #include "error.h"
 
 VMState *
-cvm_state_new(InstList *inst_list)
+cvm_state_new(InstList *inst_list, StringPool *string_pool)
 {
     VMState *vm = malloc(sizeof(VMState));
     if (!vm) return NULL;
 
-    vm->string_pool = string_pool_new();
+    vm->string_pool = string_pool;
     vm->inst_list = inst_list;
     vm->pc = 0;
     return vm;
@@ -25,7 +25,9 @@ cvm_state_destroy(VMState *vm)
     if (vm->inst_list) {
         cvm_list_destroy(vm->inst_list);
     }
-    string_pool_destroy(vm->string_pool);
+    if (vm->string_pool) {
+        string_pool_destroy(vm->string_pool);
+    }
     free(vm);
 }
 

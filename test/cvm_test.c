@@ -15,7 +15,7 @@ cvm_test_basic_insts(CuTest *tc)
     cvm_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 1, 2));
     cvm_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
-    VMState *vm = cvm_state_new(inst_list);
+    VMState *vm = cvm_state_new(inst_list, NULL);
     cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 5, value_to_int(cvm_get_register(vm, 1)));
@@ -41,7 +41,7 @@ cvm_test_branch_insts(CuTest *tc)
 
     cvm_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
-    VMState *vm = cvm_state_new(inst_list);
+    VMState *vm = cvm_state_new(inst_list, NULL);
     cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 1, value_to_int(cvm_get_register(vm, 1)));
