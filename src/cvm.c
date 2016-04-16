@@ -88,13 +88,13 @@ cvm_state_destroy(VMState *vm)
     free(vm);
 }
 
-static inline void
+inline void
 cvm_set_register(VMState *vm, unsigned int reg, Value value)
 { if (reg) { vm->regs[reg] = value; } }
 
-static inline Value
-cvm_get_register(VMState *vm, unsigned int reg)
-{ return reg ? vm->regs[reg] : value_from_int(0); }
+inline Value
+cvm_get_register(VMState *vm, unsigned int reg_id)
+{ return vm->regs[reg_id]; }
 
 void
 cvm_state_run(VMState *vm)
@@ -154,6 +154,66 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rs))
                     )
                 );
+                break;
+            case I_SEQ:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rt)) ==
+                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_SLT:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rt)) <
+                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_SLE:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rt)) <=
+                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_SGT:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rt)) >
+                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_SGE:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rt)) >=
+                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_BR:
+                if (value_to_int(cvm_get_register(vm, inst.i_rd))) {
+                    vm->pc += inst.i_imm;
+                }
+                break;
+            case I_J:
+                vm->pc = (size_t)inst.i_imm;
+                break;
+            case I_JAL:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(vm->pc)
+                );
+                vm->pc = (size_t)inst.i_imm;
                 break;
             default:
                 error_f("Unknown VM instrument (offset %d)", vm->pc - 1);

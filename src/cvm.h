@@ -19,6 +19,15 @@ enum InstType
     I_MUL,
     I_DIV,
     I_MOD,
+    I_SEQ,
+    I_SLT,
+    I_SLE,
+    I_SGT,
+    I_SGE,
+
+    I_BR,
+    I_J,
+    I_JAL,
 
     INST_NR
 };
@@ -48,7 +57,7 @@ cvm_inst_new_d_type(unsigned int type, unsigned int rd, unsigned int rs, unsigne
 { Inst ret; ret.type = type; ret.i_rd = rd; ret.i_rs = rs; ret.i_rt = rt; return ret; }
 
 static inline Inst
-cvm_inst_new_i_type(unsigned int type, unsigned int rd, unsigned int imm)
+cvm_inst_new_i_type(unsigned int type, unsigned int rd, int imm)
 { Inst ret; ret.type = type; ret.i_rd = rd; ret.i_imm = imm; return ret; }
 
 typedef struct InstList
@@ -62,6 +71,7 @@ InstList *cvm_list_new(size_t capacity);
 InstList *cvm_list_resize(InstList *list, size_t capacity);
 InstList *cvm_list_append(InstList *list, Inst inst);
 void cvm_list_destroy(InstList *list);
+#define cvm_list_push(list, inst)   list = cvm_list_append(list, inst)
 
 typedef struct VMState
 {
@@ -73,5 +83,8 @@ typedef struct VMState
 VMState *cvm_state_new(InstList *inst_list);
 void cvm_state_run(VMState *vm);
 void cvm_state_destroy(VMState *vm);
+
+Value cvm_get_register(VMState *vm, unsigned int reg_id);
+void cvm_set_register(VMState *vm, unsigned int reg_id, Value value);
 
 #endif //CRIPT_CVM_H

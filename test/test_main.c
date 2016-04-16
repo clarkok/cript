@@ -7,6 +7,8 @@
 #include "CuTest.h"
 
 CuSuite *cvm_test_suite();
+CuSuite *hash_test_suite();
+CuSuite *cstring_test_suite();
 
 int
 main()
@@ -15,6 +17,8 @@ main()
     CuSuite *suite = CuSuiteNew();
 
     CuSuiteAddSuite(suite, cvm_test_suite());
+    CuSuiteAddSuite(suite, hash_test_suite());
+    CuSuiteAddSuite(suite, cstring_test_suite());
 
     CuSuiteRun(suite);
     CuSuiteSummary(suite, output);
