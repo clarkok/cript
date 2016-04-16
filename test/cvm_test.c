@@ -8,12 +8,12 @@
 void
 cvm_test_basic_insts(CuTest *tc)
 {
-    InstList *inst_list = cvm_list_new(16);
+    InstList *inst_list = inst_list_new(16);
 
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_LI, 1, 5));
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_LI, 2, 10));
-    cvm_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 1, 2));
-    cvm_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_LI, 1, 5));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_LI, 2, 10));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 1, 2));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     VMState *vm = cvm_state_new(inst_list, NULL);
     cvm_state_run(vm);
@@ -28,18 +28,18 @@ cvm_test_basic_insts(CuTest *tc)
 void
 cvm_test_branch_insts(CuTest *tc)
 {
-    InstList *inst_list = cvm_list_new(16);
+    InstList *inst_list = inst_list_new(16);
 
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_LI, 1, 1));
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_LI, 2, 10));
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_LI, 3, 0));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_LI, 1, 1));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_LI, 2, 10));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_LI, 3, 0));
 
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_J, 0, 5));
-    cvm_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 3, 1));
-    cvm_list_push(inst_list, cvm_inst_new_d_type(I_SLT, 4, 2, 3));
-    cvm_list_push(inst_list, cvm_inst_new_i_type(I_BR, 4, -3));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_J, 0, 5));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 3, 1));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_SLT, 4, 2, 3));
+    inst_list_push(inst_list, cvm_inst_new_i_type(I_BR, 4, -3));
 
-    cvm_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     VMState *vm = cvm_state_new(inst_list, NULL);
     cvm_state_run(vm);

@@ -17,7 +17,7 @@ cvm_list_resize_capacity(size_t original)
 { return original ? (original + (original >> 1)) : CVM_LIST_DEFAULT_CAPACITY; }
 
 InstList *
-cvm_list_new(size_t capacity)
+inst_list_new(size_t capacity)
 {
     size_t insts_size = cvm_list_insts_size(capacity);
 
@@ -33,7 +33,7 @@ cvm_list_new(size_t capacity)
 }
 
 InstList *
-cvm_list_resize(InstList *list, size_t capacity)
+inst_list_resize(InstList *list, size_t capacity)
 {
     size_t insts_size = cvm_list_insts_size(capacity);
     size_t original_size = cvm_list_insts_size(list->capacity);
@@ -52,10 +52,10 @@ cvm_list_resize(InstList *list, size_t capacity)
 }
 
 InstList *
-cvm_list_append(InstList *list, Inst inst)
+inst_list_append(InstList *list, Inst inst)
 {
     if (list->count == list->capacity) {
-        list = cvm_list_resize(list, cvm_list_resize_capacity(list->capacity));
+        list = inst_list_resize(list, cvm_list_resize_capacity(list->capacity));
     }
 
     list->insts[list->count++] = inst;
@@ -63,6 +63,6 @@ cvm_list_append(InstList *list, Inst inst)
 }
 
 void
-cvm_list_destroy(InstList *list)
+inst_list_destroy(InstList *list)
 { free(list); }
 

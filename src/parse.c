@@ -23,11 +23,14 @@ _lex_parse_number(ParseState *state)
 void
 _lex_parse_identifier(ParseState *state)
 {
-    char buffer[256],
+    char buffer[MAX_SHORT_STRING_LENGTH + 1],
          *buf_ptr = buffer;
 
     while (state->current != state->limit && isalnum(*(state->current))) {
-        *buf_ptr++ = *(state->current++);
+        if (buf_ptr - buffer < MAX_SHORT_STRING_LENGTH) {
+            *buf_ptr++ = *(state->current);
+        }
+        state->current++;
         state->column++;
     }
 
@@ -153,4 +156,36 @@ _lex_next(ParseState *state)
     int ret = state->peaking_token;
     state->peaking_token = 0;
     return ret;
+}
+
+ParseState *
+parse_state_from_string(const char *content)
+{
+    ParseState *state = (ParseState*)malloc(sizeof(ParseState));
+
+    state->filename = "<string>";
+    state->line = 0;
+    state->column = 0;
+
+    state->content = content;
+    state->content_length = strlen(content);
+
+    state->string_pool = string_pool_new();
+    state->inst_list = inst_list_new(16);
+
+    state->current = state->content;
+    state->limit = state->content + state->content_length;
+
+    state->peaking_token = 0;
+    state->peaking_value = 0;
+
+    return state;
+}
+
+void
+parse_state_destroy(ParseState *state)
+{
+    if (state->string_pool) { string_pool_destroy(state->string_pool); }
+    if (state->inst_list)   { inst_list_destroy(state->inst_list); }
+    free(state);
 }

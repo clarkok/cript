@@ -23,7 +23,7 @@ void
 cvm_state_destroy(VMState *vm)
 {
     if (vm->inst_list) {
-        cvm_list_destroy(vm->inst_list);
+        inst_list_destroy(vm->inst_list);
     }
     if (vm->string_pool) {
         string_pool_destroy(vm->string_pool);

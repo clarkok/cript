@@ -18,6 +18,7 @@ typedef struct ParseState
     size_t content_length;
 
     StringPool *string_pool;
+    InstList *inst_list;
 
     const char *current;
     const char *limit;
@@ -25,5 +26,8 @@ typedef struct ParseState
     int peaking_token;
     intptr_t peaking_value;
 } ParseState;
+
+ParseState *parse_state_from_string(const char *content);
+void parse_state_destroy(ParseState *state);
 
 #endif //CRIPT_PARSE_H
