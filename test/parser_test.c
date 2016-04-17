@@ -312,7 +312,6 @@ parse_if_true_test(CuTest *tc)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
@@ -321,6 +320,154 @@ parse_if_true_test(CuTest *tc)
     cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_if_false_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;"
+        "if (0) {\n"
+        "  a = 1;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_if_else_true_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;"
+        "if (1) {\n"
+        "  a = 1;\n"
+        "}\n"
+        "else {\n"
+        "  a = 2;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_if_else_false_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;\n"
+        "if (0) {\n"
+        "  a = 1;\n"
+        "}\n"
+        "else {\n"
+        "  a = 2;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_nested_if_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;\n"
+        "if (1) {\n"
+        "  a = 1;\n"
+        "  if (a) {\n"
+        "    a = 2;\n"
+        "  }\n"
+        "  else a = 3;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_nested_if_test_buggy1(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;\n"
+            "if (1) {\n"
+            "  a = 1;\n"
+            "  if (a) a = 2;\n"
+            "  else a = 3;\n"
+            "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -337,6 +484,11 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_block_test);
     SUITE_ADD_TEST(suite, parse_nested_block_test);
     SUITE_ADD_TEST(suite, parse_if_true_test);
+    SUITE_ADD_TEST(suite, parse_if_false_test);
+    SUITE_ADD_TEST(suite, parse_if_else_true_test);
+    SUITE_ADD_TEST(suite, parse_if_else_false_test);
+    SUITE_ADD_TEST(suite, parse_nested_if_test);
+    SUITE_ADD_TEST(suite, parse_nested_if_test_buggy1);
 
     return suite;
 }

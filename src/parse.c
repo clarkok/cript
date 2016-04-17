@@ -580,7 +580,10 @@ _parse_if_else_stmt(ParseState *state)
 
     size_t br_index = state->inst_list->count;
     inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
+
+    _parse_push_scope(state);
     _parse_statement(state);
+    _parse_join_scope(state);
 
     tok = _lex_peak(state);
     if (tok == TOK_ID && _parse_find_in_symbol_table(state, state->peaking_value) == -R_ELSE) {
@@ -589,7 +592,9 @@ _parse_if_else_stmt(ParseState *state)
         inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, 0));
 
         state->inst_list->insts[br_index].i_imm = state->inst_list->count - br_index - 1;
+        _parse_push_scope(state);
         _parse_statement(state);
+        _parse_join_scope(state);
 
         state->inst_list->insts[j_index].i_imm = state->inst_list->count;
     }
