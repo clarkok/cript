@@ -14,6 +14,13 @@ enum Token
     TOK_STRING,
 };
 
+enum ReservedWord
+{
+    R_LET = 0,
+
+    RESERVED_WORD_NR
+};
+
 int _lex_peak(ParseState *state);
 int _lex_next(ParseState *state);
 

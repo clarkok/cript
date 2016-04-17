@@ -30,6 +30,13 @@ typedef struct Hash
 #define hash_need_shrink(hash)      (hash_capacity(hash) >= HASH_MIN_CAPACITY && \
                                      hash_size(hash) < (hash_capacity(hash) >> 1))
 
+#define hash_set_and_update(hash, key, value)                                                               \
+    do {                                                                                                    \
+        hash_set((hash), (uintptr_t)key, value);                                                            \
+        if (hash_need_expand(hash)) { Hash *old = hash; (hash) = hash_expand(hash); hash_destroy(old); }    \
+        if (hash_need_shrink(hash)) { Hash *old = hash; (hash) = hash_shrink(hash); hash_destroy(old); }    \
+    } while (0)
+
 Hash *hash_new(size_t capacity);
 void hash_destroy(Hash *hash);
 

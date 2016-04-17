@@ -5,6 +5,9 @@
 #include "CuTest.h"
 #include "parse.h"
 #include "parse_internal.h"
+#include "cvm.h"
+
+#include "inst_output.h"
 
 void
 lex_test(CuTest *tc)
@@ -155,12 +158,44 @@ lex_test(CuTest *tc)
     parse_state_destroy(state);
 }
 
+void
+parse_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 1;\n"
+        "let b = 2;\n"
+        "a = a + b;\n"
+        "b = a - b;\n"
+        "a = a - b;\n"
+    ;
+
+    ParseState *state = parse_state_from_string(TEST_CONTENT);
+
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+    cvm_state_run(vm);
+
+    Value reg_a = hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(vm->string_pool, "a"));
+    Value reg_b = hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(vm->string_pool, "b"));
+
+    CuAssertIntEquals(tc, 2, value_to_int(vm->regs[value_to_int(reg_a)]));
+    CuAssertIntEquals(tc, 1, value_to_int(vm->regs[value_to_int(reg_b)]));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
 CuSuite *
 parse_test_suite(void)
 {
     CuSuite *suite = CuSuiteNew();
 
     SUITE_ADD_TEST(suite, lex_test);
+    SUITE_ADD_TEST(suite, parse_test);
 
     return suite;
 }
