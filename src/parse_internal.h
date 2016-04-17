@@ -22,6 +22,7 @@ enum ReservedWord
     R_LET = 1,
     R_IF,
     R_ELSE,
+    R_WHILE,
 
     RESERVED_WORD_NR
 };

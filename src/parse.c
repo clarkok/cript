@@ -320,6 +320,7 @@ _parse_inject_reserved(ParseState *state, CString *reserved[])
     inject_reserved(R_LET, "let");
     inject_reserved(R_IF, "if");
     inject_reserved(R_ELSE, "else");
+    inject_reserved(R_WHILE, "while");
 
 #undef inject_reserved
 }
@@ -578,7 +579,7 @@ _parse_if_else_stmt(ParseState *state)
         return;
     }
 
-    size_t br_index = state->inst_list->count;
+    size_t bnr_index = state->inst_list->count;
     inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
 
     _parse_push_scope(state);
@@ -591,7 +592,7 @@ _parse_if_else_stmt(ParseState *state)
         size_t j_index = state->inst_list->count;
         inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, 0));
 
-        state->inst_list->insts[br_index].i_imm = state->inst_list->count - br_index - 1;
+        state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
         _parse_push_scope(state);
         _parse_statement(state);
         _parse_join_scope(state);
@@ -599,8 +600,40 @@ _parse_if_else_stmt(ParseState *state)
         state->inst_list->insts[j_index].i_imm = state->inst_list->count;
     }
     else {
-        state->inst_list->insts[br_index].i_imm = state->inst_list->count - br_index - 1;
+        state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
     }
+}
+
+void
+_parse_while_stmt(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == TOK_ID);
+    assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_WHILE);
+
+    size_t while_begin = state->inst_list->count;
+
+    tok = _lex_next(state);
+    if (tok != '(') {
+        parse_expect_error(state, "'('", tok);
+        return;
+    }
+    size_t reg = _parse_right_hand_expr(state);
+    tok = _lex_next(state);
+    if (tok != ')') {
+        parse_expect_error(state, "')'", tok);
+        return;
+    }
+
+    size_t bnr_index = state->inst_list->count;
+    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
+
+    _parse_push_scope(state);
+    _parse_statement(state);
+    _parse_join_scope(state);
+    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, while_begin));
+
+    state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
 }
 
 void
@@ -622,6 +655,9 @@ _parse_statement(ParseState *state)
                         break;
                     case -R_IF:
                         _parse_if_else_stmt(state);
+                        break;
+                    case -R_WHILE:
+                        _parse_while_stmt(state);
                         break;
                     default:
                         _parse_expr_stmt(state);
