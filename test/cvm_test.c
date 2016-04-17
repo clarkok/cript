@@ -36,7 +36,7 @@ cvm_test_branch_insts(CuTest *tc)
 
     inst_list_push(inst_list, cvm_inst_new_i_type(I_J, 0, 5));
     inst_list_push(inst_list, cvm_inst_new_d_type(I_ADD, 3, 3, 1));
-    inst_list_push(inst_list, cvm_inst_new_d_type(I_SLT, 4, 2, 3));
+    inst_list_push(inst_list, cvm_inst_new_d_type(I_SLT, 4, 3, 2));
     inst_list_push(inst_list, cvm_inst_new_i_type(I_BR, 4, -3));
 
     inst_list_push(inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));

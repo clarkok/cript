@@ -57,8 +57,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) +
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) +
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -66,8 +66,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) +
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) -
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -75,8 +75,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) *
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) *
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -84,8 +84,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) /
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) /
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -93,8 +93,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) %
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) %
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -102,8 +102,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) ==
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) ==
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -111,8 +111,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) <
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) <
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -120,8 +120,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) <=
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) <=
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -129,8 +129,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) >
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) >
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
@@ -138,8 +138,8 @@ cvm_state_run(VMState *vm)
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rt)) >=
-                        value_to_int(cvm_get_register(vm, inst.i_rs))
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) >=
+                        value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;

@@ -9,6 +9,7 @@
 
 #include "value.h"
 #include "string_pool.h"
+#include "parse.h"
 
 #include "inst.h"
 #include "inst_list.h"
@@ -23,6 +24,17 @@ typedef struct VMState
 } VMState;
 
 VMState *cvm_state_new(InstList *inst_list, StringPool *string_pool);
+
+static inline VMState*
+cvm_state_new_from_parse_state(ParseState *state)
+{
+    VMState *ret = cvm_state_new(state->inst_list, state->string_pool);
+    state->inst_list = NULL;
+    state->string_pool = NULL;
+
+    return ret;
+}
+
 void cvm_state_run(VMState *vm);
 void cvm_state_destroy(VMState *vm);
 
