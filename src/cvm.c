@@ -144,8 +144,8 @@ cvm_state_run(VMState *vm)
                     )
                 );
                 break;
-            case I_BR:
-                if (value_to_int(cvm_get_register(vm, inst.i_rd))) {
+            case I_BNR:
+                if (!value_to_int(cvm_get_register(vm, inst.i_rd))) {
                     vm->pc += inst.i_imm;
                 }
                 break;

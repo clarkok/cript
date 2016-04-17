@@ -18,7 +18,7 @@ const char INST_NAME[] =
         "sle     "
         "sgt     "
         "sge     "
-        "br      "
+        "bnr     "
         "j       "
         "jal     "
 ;

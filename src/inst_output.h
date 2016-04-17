@@ -18,7 +18,7 @@ output_inst(FILE *fout, Inst inst)
     fprintf(fout, "%8.8s", INST_NAME + (inst.type << 3));
     switch (inst.type) {
         case I_LI:
-        case I_BR:
+        case I_BNR:
         case I_JAL:
             fprintf(fout, "$%d,\t%d\n", inst.i_rd, inst.i_imm);
             break;

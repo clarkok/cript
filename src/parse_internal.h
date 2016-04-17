@@ -20,6 +20,8 @@ enum ReservedWord
 {
     R_ZERO,
     R_LET = 1,
+    R_IF,
+    R_ELSE,
 
     RESERVED_WORD_NR
 };

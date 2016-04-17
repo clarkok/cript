@@ -21,7 +21,7 @@ enum InstType
     I_SGT,
     I_SGE,
 
-    I_BR,
+    I_BNR,
     I_J,
     I_JAL,
 

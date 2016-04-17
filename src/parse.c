@@ -318,6 +318,8 @@ _parse_inject_reserved(ParseState *state, CString *reserved[])
     hash_set_and_update(global_scope->symbol_table, (uintptr_t)reserved[id], value_from_int(-id))
 
     inject_reserved(R_LET, "let");
+    inject_reserved(R_IF, "if");
+    inject_reserved(R_ELSE, "else");
 
 #undef inject_reserved
 }
@@ -542,7 +544,6 @@ void
 _parse_block_stmt(ParseState *state)
 {
     int tok = _lex_next(state);
-
     assert(tok == '{');
 
     _parse_push_scope(state);
@@ -555,6 +556,45 @@ _parse_block_stmt(ParseState *state)
 
     if (_lex_next(state) == TOK_EOF) {
         parse_error(state, "%s", "Unexpected EOF");
+    }
+}
+
+void
+_parse_if_else_stmt(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == TOK_ID);
+    assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_IF);
+
+    tok = _lex_next(state);
+    if (tok != '(') {
+        parse_expect_error(state, "'('", tok);
+        return;
+    }
+    size_t reg = _parse_right_hand_expr(state);
+    tok = _lex_next(state);
+    if (tok != ')') {
+        parse_expect_error(state, "')'", tok);
+        return;
+    }
+
+    size_t br_index = state->inst_list->count;
+    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
+    _parse_statement(state);
+
+    tok = _lex_peak(state);
+    if (tok == TOK_ID && _parse_find_in_symbol_table(state, state->peaking_value) == -R_ELSE) {
+        _lex_next(state);
+        size_t j_index = state->inst_list->count;
+        inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, 0));
+
+        state->inst_list->insts[br_index].i_imm = state->inst_list->count - br_index - 1;
+        _parse_statement(state);
+
+        state->inst_list->insts[j_index].i_imm = state->inst_list->count;
+    }
+    else {
+        state->inst_list->insts[br_index].i_imm = state->inst_list->count - br_index - 1;
     }
 }
 
@@ -574,6 +614,9 @@ _parse_statement(ParseState *state)
                 switch (_parse_find_in_symbol_table(state, state->peaking_value)) {
                     case -R_LET:
                         _parse_let_stmt(state);
+                        break;
+                    case -R_IF:
+                        _parse_if_else_stmt(state);
                         break;
                     default:
                         _parse_expr_stmt(state);
