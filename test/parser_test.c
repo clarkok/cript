@@ -225,6 +225,77 @@ parse_complex_test(CuTest *tc)
 
     CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(get_reg_value_from_vm(vm, reg_a)));
 
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_block_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;\n"
+        "let b = 0;\n"
+        "{\n"
+        "  let a = 1;\n"
+        "  b = a + 1;\n"
+        "}\n"
+        "a = b + 1;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+    intptr_t reg_b = get_reg_from_parse_state(state, "b");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 3, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_b)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_nested_block_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 0;\n"
+        "let b = 0;\n"
+        "{\n"
+        "  let a = 1;\n"
+        "  b = b + a;\n"
+        "  {\n"
+        "    let a = 2;\n"
+        "    b = b + a;\n"
+        "  }\n"
+        "  b = b + a;\n"
+        "}\n"
+        "b = b + a;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+    intptr_t reg_b = get_reg_from_parse_state(state, "b");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_b)));
+
+    cvm_state_destroy(vm);
     parse_state_destroy(state);
 }
 
@@ -236,6 +307,8 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, lex_test);
     SUITE_ADD_TEST(suite, parse_test);
     SUITE_ADD_TEST(suite, parse_complex_test);
+    SUITE_ADD_TEST(suite, parse_block_test);
+    SUITE_ADD_TEST(suite, parse_nested_block_test);
 
     return suite;
 }

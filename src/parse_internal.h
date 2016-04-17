@@ -28,8 +28,9 @@ typedef struct ParseScope
 {
     LinkedNode _linked;
 
-    size_t register_count;
+    size_t register_counter;
     Hash *symbol_table;
+    Hash *upper_table;
 } ParseScope;
 
 int _lex_peak(ParseState *state);
@@ -40,13 +41,23 @@ int _lex_next(ParseState *state);
 static inline Value
 _parse_symbol_table_lookup(ParseState *state, CString *string)
 {
-    Value result = value_undefined();
+    Value result;
     list_for_each(&state->scope_stack, node) {
         ParseScope *scope = list_get(node, ParseScope, _linked);
-        result = hash_find(scope->symbol_table, (uintptr_t)string);
-        if (!value_is_undefined(result)) { break; }
+        if (!value_is_undefined(result = hash_find(scope->upper_table, (uintptr_t)string))) return result;
+        if (!value_is_undefined(result = hash_find(scope->symbol_table, (uintptr_t)string))) return result;
     }
-    return result;
+    return value_undefined();
+}
+
+static inline ParseScope *
+_parse_find_define_scope(ParseState *state, CString *string)
+{
+    list_for_each(&state->scope_stack, node) {
+        ParseScope *scope = list_get(node, ParseScope, _linked);
+        if (!value_is_undefined(hash_find(scope->symbol_table, (uintptr_t)string))) return scope;
+    }
+    return NULL;
 }
 
 #define _parse_exists_in_symbol_table(state, string)    \
@@ -54,5 +65,11 @@ _parse_symbol_table_lookup(ParseState *state, CString *string)
 
 #define _parse_find_in_symbol_table(state, string)      \
     value_to_int(_parse_symbol_table_lookup(state, (CString*)string))
+
+#define _parse_symbol_table_lookup_current(state, string)   \
+    hash_find(scope_stack_top(state)->symbol_table, (uintptr_t)string)
+
+#define _parse_exists_in_symbol_table_current(state, string)    \
+    !value_is_undefined(_parse_symbol_table_lookup_current(state, (CString*)string))
 
 #endif //CRIPT_PARSE_INTERNAL_H

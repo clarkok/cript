@@ -16,6 +16,7 @@ cvm_state_new(InstList *inst_list, StringPool *string_pool)
     vm->string_pool = string_pool;
     vm->inst_list = inst_list;
     vm->pc = 0;
+    vm->regs[0] = value_from_int(0);
     return vm;
 }
 

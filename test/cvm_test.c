@@ -51,6 +51,16 @@ cvm_test_branch_insts(CuTest *tc)
     cvm_state_destroy(vm);
 }
 
+void
+cvm_register_zero_should_be_zero_test(CuTest *tc)
+{
+    VMState *vm = cvm_state_new(NULL, NULL);
+
+    CuAssertIntEquals(tc, 0, value_to_int(cvm_get_register(vm, 0)));
+
+    cvm_state_destroy(vm);
+}
+
 CuSuite *
 cvm_test_suite(void)
 {
@@ -58,6 +68,7 @@ cvm_test_suite(void)
 
     SUITE_ADD_TEST(suite, cvm_test_basic_insts);
     SUITE_ADD_TEST(suite, cvm_test_branch_insts);
+    SUITE_ADD_TEST(suite, cvm_register_zero_should_be_zero_test);
 
     return suite;
 }

@@ -37,6 +37,15 @@ typedef struct Hash
         if (hash_need_shrink(hash)) { Hash *old = hash; (hash) = hash_shrink(hash); hash_destroy(old); }    \
     } while (0)
 
+#define hash_for_each(hash, node)                               \
+    for (                                                       \
+        HashNode *node = (hash)->content,                       \
+                 *limit = (hash)->content + (hash)->capacity;   \
+        node != limit;                                          \
+        ++node                                                  \
+    )                                                           \
+    if (!value_is_undefined(node->value) && !value_is_null(node->value))
+
 Hash *hash_new(size_t capacity);
 void hash_destroy(Hash *hash);
 

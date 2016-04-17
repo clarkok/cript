@@ -243,8 +243,9 @@ parse_state_new_from_string(const char *content)
     list_init(&state->scope_stack);
 
     ParseScope *scope = malloc(sizeof(ParseScope));
-    scope->register_count = 1;
+    scope->register_counter = 1;
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
+    scope->upper_table = hash_new(HASH_MIN_CAPACITY);
     list_prepend(&state->scope_stack, &scope->_linked);
 
     return state;
@@ -267,29 +268,45 @@ static inline void
 _parse_push_scope(ParseState *state)
 {
     ParseScope *scope = malloc(sizeof(ParseScope));
-    scope->register_count = scope_stack_top(state)->register_count;
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
+    scope->upper_table = hash_new(HASH_MIN_CAPACITY);
+    scope->register_counter = scope_stack_top(state)->register_counter;
     list_prepend(&state->scope_stack, &scope->_linked);
 }
 
-static inline void
-_parse_pop_scope(ParseState *state)
+void
+_parse_join_scope(ParseState *state)
 {
-    ParseScope *scope = list_get(list_unlink(list_head(&state->scope_stack)), ParseScope, _linked);
+    ParseScope *scope = scope_stack_top(state);
+    list_unlink(list_head(&state->scope_stack));
+
+    hash_for_each(scope->upper_table, node) {
+        inst_list_push(state->inst_list,
+                       cvm_inst_new_d_type(
+                           I_ADD,
+                           (size_t)_parse_find_in_symbol_table(state, node->key),
+                           (size_t)value_to_int(node->value),
+                           0
+                       )
+        );
+    }
+
+    hash_destroy(scope->upper_table);
     hash_destroy(scope->symbol_table);
     free(scope);
 }
 
 static inline size_t
 _parse_allocate_register(ParseState *state)
-{ return scope_stack_top(state)->register_count++; }
+{ return scope_stack_top(state)->register_counter++; }
 
 static inline void
-_parse_insert_into_symbol_table(ParseState *state, CString *string, size_t reg)
-{
-    ParseScope *scope = scope_stack_top(state);
-    hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg));
-}
+_parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
+{ hash_set_and_update(scope->upper_table, (uintptr_t)string, value_from_int(reg)); }
+
+static inline void
+_parse_define_into_scope(ParseScope *scope, CString *string, size_t reg)
+{ hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg)); }
 
 static inline void
 _parse_inject_reserved(ParseState *state, CString *reserved[])
@@ -368,10 +385,9 @@ _parse_mul_expr(ParseState *state)
     int tok = _lex_peak(state);
     if (tok == '*' || tok == '/' || tok == '%') {
         while (tok == '*' || tok == '/' || tok == '%') {
-            size_t temp_reg = _parse_allocate_register(state);
-
             _lex_next(state);
             size_t b_reg = _parse_unary_expr(state);
+            size_t temp_reg = _parse_allocate_register(state);
 
             inst_list_push(
                 state->inst_list,
@@ -401,10 +417,9 @@ _parse_add_expr(ParseState *state)
     int tok = _lex_peak(state);
     if (tok == '+' || tok == '-') {
         while (tok == '+' || tok == '-') {
-            size_t temp_reg = _parse_allocate_register(state);
-
             _lex_next(state);
             size_t b_reg = _parse_mul_expr(state);
+            size_t temp_reg = _parse_allocate_register(state);
 
             inst_list_push(
                 state->inst_list,
@@ -464,7 +479,14 @@ _parse_assignment_expr(ParseState *state)
         return;
     }
 
-    _parse_insert_into_symbol_table(state, literal, _parse_right_hand_expr(state));
+    size_t result_reg = _parse_right_hand_expr(state);
+
+    if (_parse_find_define_scope(state, literal) == scope_stack_top(state)) {
+        _parse_define_into_scope(scope_stack_top(state), literal, result_reg);
+    }
+    else {
+        _parse_insert_into_scope(scope_stack_top(state), literal, result_reg);
+    }
 }
 
 void
@@ -482,7 +504,7 @@ _parse_let_stmt(ParseState *state)
         }
 
         CString *literal = (CString*)state->peaking_value;
-        if (_parse_exists_in_symbol_table(state, literal)) {
+        if (_parse_exists_in_symbol_table_current(state, literal)) {
             parse_error(state, "Duplicated symbol: '%.*s'",
                         literal->length,
                         literal->content
@@ -492,10 +514,10 @@ _parse_let_stmt(ParseState *state)
 
         if (_lex_peak(state) == '=') {
             _lex_next(state);
-            _parse_insert_into_symbol_table(state, literal, _parse_right_hand_expr(state));
+            _parse_define_into_scope(scope_stack_top(state), literal, _parse_right_hand_expr(state));
         }
         else {
-            _parse_insert_into_symbol_table(state, literal, 0);
+            _parse_define_into_scope(scope_stack_top(state), literal, 0);
         }
     } while (_lex_peak(state) == ',');
 
@@ -514,6 +536,67 @@ _parse_expr_stmt(ParseState *state)
     }
 }
 
+void _parse_statement(ParseState *state);
+
+void
+_parse_block_stmt(ParseState *state)
+{
+    int tok = _lex_next(state);
+
+    assert(tok == '{');
+
+    _parse_push_scope(state);
+
+    while (_lex_peak(state) != TOK_EOF && _lex_peak(state) != '}') {
+        _parse_statement(state);
+    }
+
+    _parse_join_scope(state);
+
+    if (_lex_next(state) == TOK_EOF) {
+        parse_error(state, "%s", "Unexpected EOF");
+    }
+}
+
+void
+_parse_statement(ParseState *state)
+{
+    switch (_lex_peak(state)) {
+        case TOK_EOF:
+            parse_error(state, "%s", "Unexpected EOF");
+            break;
+        case '{':
+            _parse_block_stmt(state);
+            break;
+        case TOK_ID:
+        {
+            if (_parse_exists_in_symbol_table(state, state->peaking_value)) {
+                switch (_parse_find_in_symbol_table(state, state->peaking_value)) {
+                    case -R_LET:
+                        _parse_let_stmt(state);
+                        break;
+                    default:
+                        _parse_expr_stmt(state);
+                        break;
+                }
+            }
+            else {
+                CString *literal = (CString*)(state->peaking_value);
+                parse_error(state, "Undefined identifier: '%.*s'",
+                            literal->length,
+                            literal->content
+                );
+            }
+            break;
+        }
+        default:
+            parse_error(state, "Unexpected Token: '%c'(%d)",
+                        _lex_peak(state),
+                        _lex_peak(state)
+            );
+    }
+}
+
 void
 parse(ParseState *state)
 {
@@ -521,36 +604,6 @@ parse(ParseState *state)
     _parse_inject_reserved(state, reserved);
 
     while (_lex_peak(state) != TOK_EOF) {
-        switch (_lex_peak(state)) {
-            case TOK_EOF:
-                parse_error(state, "%s", "Unexpected EOF");
-                break;
-            case TOK_ID:
-            {
-                if (_parse_exists_in_symbol_table(state, state->peaking_value)) {
-                    switch (_parse_find_in_symbol_table(state, state->peaking_value)) {
-                        case -R_LET:
-                            _parse_let_stmt(state);
-                            break;
-                        default:
-                            _parse_expr_stmt(state);
-                            break;
-                    }
-                }
-                else {
-                    CString *literal = (CString*)(state->peaking_value);
-                    parse_error(state, "Undefined identifier: '%.*s'",
-                                literal->length,
-                                literal->content
-                    );
-                }
-                break;
-            }
-            default:
-                parse_error(state, "Unexpected Token: '%c'(%d)",
-                            _lex_peak(state),
-                            _lex_peak(state)
-                );
-        }
+        _parse_statement(state);
     }
 }
