@@ -171,7 +171,7 @@ lex_test(CuTest *tc)
 }
 
 #define get_reg_from_parse_state(state, name)   \
-    hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(state->string_pool, name))
+    _parse_find_in_symbol_table(state, (uintptr_t)string_pool_find_str(state->string_pool, name))
 
 #define get_reg_value_from_vm(vm, reg)  \
     vm->regs[reg]
@@ -192,14 +192,14 @@ parse_test(CuTest *tc)
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
-    Value reg_a = get_reg_from_parse_state(state, "a");
-    Value reg_b = get_reg_from_parse_state(state, "b");
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+    intptr_t reg_b = get_reg_from_parse_state(state, "b");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
     cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_a))));
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_b))));
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_b)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -218,12 +218,12 @@ parse_complex_test(CuTest *tc)
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
-    Value reg_a = get_reg_from_parse_state(state, "a");
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
     cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_a))));
+    CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(get_reg_value_from_vm(vm, reg_a)));
 
     parse_state_destroy(state);
 }

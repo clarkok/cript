@@ -240,8 +240,12 @@ parse_state_new_from_string(const char *content)
     state->peaking_token = 0;
     state->peaking_value = 0;
 
-    state->register_count = 1;
-    state->symbol_table = hash_new(32);
+    list_init(&state->scope_stack);
+
+    ParseScope *scope = malloc(sizeof(ParseScope));
+    scope->register_count = 1;
+    scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
+    list_prepend(&state->scope_stack, &scope->_linked);
 
     return state;
 }
@@ -251,33 +255,50 @@ parse_state_destroy(ParseState *state)
 {
     if (state->string_pool)     { string_pool_destroy(state->string_pool); }
     if (state->inst_list)       { inst_list_destroy(state->inst_list); }
-    if (state->symbol_table)    { hash_destroy(state->symbol_table); }
+    while (list_size(&state->scope_stack)) {
+        ParseScope *scope = list_get(list_unlink(list_head(&state->scope_stack)), ParseScope, _linked);
+        hash_destroy(scope->symbol_table);
+        free(scope);
+    }
     free(state);
 }
 
-#define _parse_symbol_table_lookup(state, string)       \
-    hash_find(state->symbol_table, (uintptr_t)string)
+static inline void
+_parse_push_scope(ParseState *state)
+{
+    ParseScope *scope = malloc(sizeof(ParseScope));
+    scope->register_count = scope_stack_top(state)->register_count;
+    scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
+    list_prepend(&state->scope_stack, &scope->_linked);
+}
 
-#define _parse_exists_in_symbol_table(state, string)    \
-    !value_is_undefined(_parse_symbol_table_lookup(state, string))
-
-#define _parse_find_in_symbol_table(state, string)      \
-    value_to_int(_parse_symbol_table_lookup(state, string))
+static inline void
+_parse_pop_scope(ParseState *state)
+{
+    ParseScope *scope = list_get(list_unlink(list_head(&state->scope_stack)), ParseScope, _linked);
+    hash_destroy(scope->symbol_table);
+    free(scope);
+}
 
 static inline size_t
 _parse_allocate_register(ParseState *state)
-{ return state->register_count++; }
+{ return scope_stack_top(state)->register_count++; }
 
 static inline void
 _parse_insert_into_symbol_table(ParseState *state, CString *string, size_t reg)
-{ hash_set_and_update(state->symbol_table, (uintptr_t)string, value_from_int(reg)); }
+{
+    ParseScope *scope = scope_stack_top(state);
+    hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg));
+}
 
 static inline void
 _parse_inject_reserved(ParseState *state, CString *reserved[])
 {
+    ParseScope *global_scope = scope_stack_top(state);
+
 #define inject_reserved(id, literal)                                                                        \
     reserved[id] = string_pool_insert_str(&state->string_pool, literal);                                    \
-    hash_set_and_update(state->symbol_table, (uintptr_t)reserved[id], value_from_int(-id))
+    hash_set_and_update(global_scope->symbol_table, (uintptr_t)reserved[id], value_from_int(-id))
 
     inject_reserved(R_LET, "let");
 

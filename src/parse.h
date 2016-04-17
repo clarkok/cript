@@ -5,6 +5,8 @@
 #ifndef CRIPT_PARSE_H
 #define CRIPT_PARSE_H
 
+#include "list.h"
+
 #include "inst_list.h"
 #include "string_pool.h"
 #include "hash.h"
@@ -27,8 +29,7 @@ typedef struct ParseState
     int peaking_token;
     intptr_t peaking_value;
 
-    size_t register_count;
-    Hash *symbol_table;
+    LinkedList scope_stack;
 } ParseState;
 
 ParseState *parse_state_new_from_string(const char *content);
