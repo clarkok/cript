@@ -16,7 +16,8 @@ enum Token
 
 enum ReservedWord
 {
-    R_LET = 0,
+    R_ZERO,
+    R_LET = 1,
 
     RESERVED_WORD_NR
 };

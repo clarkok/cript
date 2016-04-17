@@ -31,7 +31,7 @@ typedef struct ParseState
     Hash *symbol_table;
 } ParseState;
 
-ParseState *parse_state_from_string(const char *content);
+ParseState *parse_state_new_from_string(const char *content);
 void parse_state_destroy(ParseState *state);
 
 void parse(ParseState *state);

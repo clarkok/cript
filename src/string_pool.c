@@ -201,3 +201,20 @@ string_pool_insert_vec(StringPool **pool_ptr, const char *vec, size_t size)
     return string;
 }
 
+void
+string_pool_dump(FILE *fout, StringPool *pool)
+{
+    StringNode *node = pool->content,
+               *limit = pool->content + pool->capacity;
+
+    for (; node != limit; ++node) {
+        if (node->string) {
+            fprintf(fout, "0x%x(%d): %.*s\n",
+                    (uint)node->string,
+                    (uint)node->string,
+                    node->string->length,
+                    node->string->content
+            );
+        }
+    }
+}

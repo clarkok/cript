@@ -6,6 +6,7 @@
 #define CRIPT_CSTRING_H
 
 #include <string.h>
+#include <stdio.h>
 
 #include "hash.h"
 
@@ -33,5 +34,7 @@ CString *string_pool_insert_vec(StringPool **pool_ptr, const char *vec, size_t s
 static inline CString *
 string_pool_insert_str(StringPool **pool_ptr, const char *str)
 { return string_pool_insert_vec(pool_ptr, str, strlen(str)); }
+
+void string_pool_dump(FILE *fout, StringPool *pool);
 
 #endif //CRIPT_CSTRING_H

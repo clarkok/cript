@@ -19,9 +19,11 @@ lex_test(CuTest *tc)
         " * and the comment will end here */\n"
         "the number is 42\n"
         "i am a line with a // line comment \n"
-        "the code ends here\n";
+        "the code ends here\n"
+        "single /\n"
+    ;
 
-    ParseState *state = parse_state_from_string(TEST_CONTENT);
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
 
     CuAssertIntEquals(tc, TOK_ID, _lex_peak(state));
     CuAssertIntEquals(tc, 0, state->line);
@@ -147,6 +149,16 @@ lex_test(CuTest *tc)
     literal = (CString*)state->peaking_value;
     CuAssertIntEquals(tc, 0, strncmp("here", literal->content, strlen("here")));
 
+    CuAssertIntEquals(tc, TOK_ID, _lex_next(state));
+    CuAssertIntEquals(tc, 7, state->line);
+    CuAssertIntEquals(tc, 6, state->column);
+    literal = (CString*)state->peaking_value;
+    CuAssertIntEquals(tc, 0, strncmp("single", literal->content, strlen("single")));
+
+    CuAssertIntEquals(tc, '/', _lex_next(state));
+    CuAssertIntEquals(tc, 7, state->line);
+    CuAssertIntEquals(tc, 8, state->column);
+
     CuAssertIntEquals(tc, TOK_EOF, _lex_next(state));
     CuAssertIntEquals(tc, TOK_EOF, _lex_next(state));
     CuAssertIntEquals(tc, TOK_EOF, _lex_next(state));
@@ -157,6 +169,12 @@ lex_test(CuTest *tc)
 
     parse_state_destroy(state);
 }
+
+#define get_reg_from_parse_state(state, name)   \
+    hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(state->string_pool, name))
+
+#define get_reg_value_from_vm(vm, reg)  \
+    vm->regs[reg]
 
 void
 parse_test(CuTest *tc)
@@ -169,23 +187,44 @@ parse_test(CuTest *tc)
         "a = a - b;\n"
     ;
 
-    ParseState *state = parse_state_from_string(TEST_CONTENT);
-
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
+
+    Value reg_a = get_reg_from_parse_state(state, "a");
+    Value reg_b = get_reg_from_parse_state(state, "b");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
     cvm_state_run(vm);
 
-    Value reg_a = hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(vm->string_pool, "a"));
-    Value reg_b = hash_find(state->symbol_table, (uintptr_t)string_pool_find_str(vm->string_pool, "b"));
-
-    CuAssertIntEquals(tc, 2, value_to_int(vm->regs[value_to_int(reg_a)]));
-    CuAssertIntEquals(tc, 1, value_to_int(vm->regs[value_to_int(reg_b)]));
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_a))));
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_b))));
 
     cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_complex_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a;\n"
+        "a = 1 * 2 / 3 + 4 % (5 + 6);\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    Value reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(get_reg_value_from_vm(vm, value_to_int(reg_a))));
+
     parse_state_destroy(state);
 }
 
@@ -196,6 +235,7 @@ parse_test_suite(void)
 
     SUITE_ADD_TEST(suite, lex_test);
     SUITE_ADD_TEST(suite, parse_test);
+    SUITE_ADD_TEST(suite, parse_complex_test);
 
     return suite;
 }

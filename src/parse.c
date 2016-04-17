@@ -181,7 +181,8 @@ _lex_peak(ParseState *state)
         }
         else if (*(state->current) == '/') {
             if (state->current + 1 == state->limit) {
-                state->peaking_token = state->current[-1];
+                state->peaking_token = *state->current++;
+                state->column++;
             }
             else if (state->current[1] == '*') {
                 _lex_parse_block_comment(state);
@@ -192,7 +193,8 @@ _lex_peak(ParseState *state)
                 continue;
             }
             else {
-                state->peaking_token = state->current[-1];
+                state->peaking_token = *state->current++;
+                state->column++;
             }
         }
         else {
@@ -218,7 +220,7 @@ _lex_next(ParseState *state)
 }
 
 ParseState *
-parse_state_from_string(const char *content)
+parse_state_new_from_string(const char *content)
 {
     ParseState *state = (ParseState*)malloc(sizeof(ParseState));
 
