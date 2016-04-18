@@ -197,6 +197,83 @@ _lex_peak(ParseState *state)
                 state->column++;
             }
         }
+        else if (
+                *(state->current) == '>' || 
+                *(state->current) == '<'
+        ) {
+            if (state->current + 1 == state->limit) {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+            else if (state->current[1] == '=') {
+                state->peaking_token = 
+                    state->current[0] == '>' ? TOK_GE :
+                                               TOK_LE ;
+                state->current += 2;
+                state->column += 2;
+            }
+            else if (state->current[1] == state->current[0]) {
+                state->peaking_token =
+                    state->current[0] == '>' ? TOK_SHR :
+                                               TOK_SHL ;
+                state->current += 2;
+                state->column += 2;
+            }
+            else {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+        }
+        else if (
+                *(state->current) == '=' ||
+                *(state->current) == '!'
+        ) {
+            if (state->current + 1 == state->limit) {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+            else if (state->current[1] == '=') {
+                state->peaking_token = 
+                    state->current[0] == '=' ? TOK_EQ :
+                                               TOK_NE ;
+                state->current += 2;
+                state->column += 2;
+            }
+            else {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+        }
+        else if (*(state->current) == '&') {
+            if (state->current + 1 == state->limit) {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+            else if (state->current[1] == '&') {
+                state->peaking_token = TOK_AND;
+                state->current += 2;
+                state->column += 2;
+            }
+            else {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+        }
+        else if (*(state->current) == '|') {
+            if (state->current + 1 == state->limit) {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+            else if (state->current[1] == '|') {
+                state->peaking_token = TOK_OR;
+                state->current += 2;
+                state->column += 2;
+            }
+            else {
+                state->peaking_token = *state->current++;
+                state->column++;
+            }
+        }
         else {
             state->peaking_token = *(state->current);
             state->current++;
@@ -386,27 +463,25 @@ _parse_mul_expr(ParseState *state)
     size_t ret = _parse_unary_expr(state);
 
     int tok = _lex_peak(state);
-    if (tok == '*' || tok == '/' || tok == '%') {
-        while (tok == '*' || tok == '/' || tok == '%') {
-            _lex_next(state);
-            size_t b_reg = _parse_unary_expr(state);
-            size_t temp_reg = _parse_allocate_register(state);
+    while (tok == '*' || tok == '/' || tok == '%') {
+        _lex_next(state);
+        size_t b_reg = _parse_unary_expr(state);
+        size_t temp_reg = _parse_allocate_register(state);
 
-            inst_list_push(
-                state->inst_list,
-                cvm_inst_new_d_type(
-                    tok == '*' ? I_MUL :
-                    tok == '/' ? I_DIV :
-                                 I_MOD,
-                    temp_reg,
-                    ret,
-                    b_reg
-                )
-            );
+        inst_list_push(
+            state->inst_list,
+            cvm_inst_new_d_type(
+                tok == '*' ? I_MUL :
+                tok == '/' ? I_DIV :
+                             I_MOD,
+                temp_reg,
+                ret,
+                b_reg
+            )
+        );
 
-            ret = temp_reg;
-            tok = _lex_peak(state);
-        }
+        ret = temp_reg;
+        tok = _lex_peak(state);
     }
 
     return ret;
@@ -418,25 +493,127 @@ _parse_add_expr(ParseState *state)
     size_t ret = _parse_mul_expr(state);
 
     int tok = _lex_peak(state);
-    if (tok == '+' || tok == '-') {
-        while (tok == '+' || tok == '-') {
-            _lex_next(state);
-            size_t b_reg = _parse_mul_expr(state);
-            size_t temp_reg = _parse_allocate_register(state);
+    while (tok == '+' || tok == '-') {
+        _lex_next(state);
+        size_t b_reg = _parse_mul_expr(state);
+        size_t temp_reg = _parse_allocate_register(state);
 
-            inst_list_push(
-                state->inst_list,
-                cvm_inst_new_d_type(
-                    tok == '+' ? I_ADD : I_SUB,
-                    temp_reg,
-                    ret,
-                    b_reg
-                )
-            );
+        inst_list_push(
+            state->inst_list,
+            cvm_inst_new_d_type(
+                tok == '+' ? I_ADD : I_SUB,
+                temp_reg,
+                ret,
+                b_reg
+            )
+        );
 
-            ret = temp_reg;
-            tok = _lex_peak(state);
+        ret = temp_reg;
+        tok = _lex_peak(state);
+    }
+
+    return ret;
+}
+
+size_t
+_parse_compare_expr(ParseState *state)
+{
+    size_t ret = _parse_add_expr(state);
+
+    int tok = _lex_peak(state);
+    while (
+            tok == '<' ||
+            tok == '>' ||
+            tok == TOK_LE ||
+            tok == TOK_GE ||
+            tok == TOK_EQ ||
+            tok == TOK_NE
+    ) {
+        _lex_next(state);
+        size_t b_reg = _parse_add_expr(state);
+        size_t temp_reg = _parse_allocate_register(state);
+
+        switch (tok) {
+            case '<':
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SLT,
+                        temp_reg,
+                        ret,
+                        b_reg
+                    )
+                );
+                break;
+            case '>':
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SLT,
+                        temp_reg,
+                        b_reg,
+                        ret
+                    )
+                );
+                break;
+            case TOK_LE:
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SLE,
+                        temp_reg,
+                        ret,
+                        b_reg
+                    )
+                );
+                break;
+            case TOK_GE:
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SLE,
+                        temp_reg,
+                        b_reg,
+                        ret
+                    )
+                );
+                break;
+            case TOK_EQ:
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SEQ,
+                        temp_reg,
+                        b_reg,
+                        ret
+                    )
+                );
+                break;
+            case TOK_NE:
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_SEQ,
+                        temp_reg,
+                        b_reg,
+                        ret
+                    )
+                );
+                inst_list_push(
+                    state->inst_list,
+                    cvm_inst_new_d_type(
+                        I_LNOT,
+                        temp_reg,
+                        temp_reg,
+                        0
+                    )
+                );
+                break;
+            default:
+                assert(0);
         }
+        ret = temp_reg;
+        tok = _lex_peak(state);
     }
 
     return ret;
@@ -445,7 +622,7 @@ _parse_add_expr(ParseState *state)
 size_t
 _parse_conditional_expr(ParseState *state)
 {
-    return _parse_add_expr(state);
+    return _parse_compare_expr(state);
 }
 
 size_t

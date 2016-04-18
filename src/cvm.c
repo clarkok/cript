@@ -126,20 +126,28 @@ cvm_state_run(VMState *vm)
                     )
                 );
                 break;
-            case I_SGT:
+            case I_LNOT:
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rs)) >
+                        !value_to_int(cvm_get_register(vm, inst.i_rs))
+                    )
+                );
+                break;
+            case I_LAND:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_int(
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) &&
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
                 break;
-            case I_SGE:
+            case I_LOR:
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
-                        value_to_int(cvm_get_register(vm, inst.i_rs)) >=
+                        value_to_int(cvm_get_register(vm, inst.i_rs)) ||
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );

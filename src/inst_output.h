@@ -30,12 +30,15 @@ output_inst(FILE *fout, Inst inst)
         case I_SEQ:
         case I_SLT:
         case I_SLE:
-        case I_SGT:
-        case I_SGE:
+        case I_LAND:
+        case I_LOR:
             fprintf(fout, "$%d,\t$%d,\t$%d\n", inst.i_rd, inst.i_rs, inst.i_rt);
             break;
         case I_J:
             fprintf(fout, "%d\n", inst.i_imm);
+            break;
+        case I_LNOT:
+            fprintf(fout, "$%d,\t$%d", inst.i_rd, inst.i_rs);
             break;
         default:
             fprintf(fout, "\n");

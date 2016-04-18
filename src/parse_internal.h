@@ -14,6 +14,17 @@ enum Token
     TOK_ID = 256,
     TOK_NUM,
     TOK_STRING,
+
+    TOK_GE,
+    TOK_LE,
+    TOK_EQ,
+    TOK_NE,
+
+    TOK_AND,
+    TOK_OR,
+
+    TOK_SHL,
+    TOK_SHR,
 };
 
 enum ReservedWord

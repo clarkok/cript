@@ -18,8 +18,10 @@ enum InstType
     I_SEQ,
     I_SLT,
     I_SLE,
-    I_SGT,
-    I_SGE,
+
+    I_LNOT,
+    I_LAND,
+    I_LOR,
 
     I_BNR,
     I_J,
