@@ -663,21 +663,59 @@ parse_object_test(CuTest *tc)
         "};\n"
         "let c = {c : 3};\n"
         "let d = b.a;\n"
+        "let e = b['b'];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
+    intptr_t reg_e = get_reg_from_parse_state(state, "e");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
 
     cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+    (void)tc;
+}
+
+void
+parse_object_set_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = {};\n"
+        "let b = {\n"
+        "  a : 1,\n"
+        "  b : 2\n"
+        "};\n"
+        "let c = {c : 3};\n"
+        "c.c = 4;\n"
+        "let d = c.c;\n"
+        "c['c'] = 5;\n"
+        "let e = c.c;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_d = get_reg_from_parse_state(state, "d");
+    intptr_t reg_e = get_reg_from_parse_state(state, "e");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+    CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_e)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -707,6 +745,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_fibonacci_test);
     SUITE_ADD_TEST(suite, parse_string_test);
     SUITE_ADD_TEST(suite, parse_object_test);
+    SUITE_ADD_TEST(suite, parse_object_set_test);
 
     return suite;
 }

@@ -660,6 +660,8 @@ _parse_postfix_expr(ParseState *state)
                 parse_expect_error(state, "']'", tok);
                 return 0;
             }
+
+            ret = temp_reg;
         }
 
         tok = _lex_peak(state);
@@ -970,6 +972,7 @@ _parse_right_hand_expr(ParseState *state)
 void
 _parse_assignment_expr(ParseState *state)
 {
+    /*
     int tok = _lex_next(state);
     if (tok != TOK_ID) {
         parse_expect_error(state, "Identifier", tok);
@@ -989,6 +992,61 @@ _parse_assignment_expr(ParseState *state)
     if (reg < 0) {
         parse_expect_error(state, "Identifier", tok);
         return;
+    }
+     */
+
+    size_t this_reg = _parse_unary_expr(state);
+    size_t key_reg = 0;
+    int tok = _lex_peak(state);
+    CString *literal = (CString*)state->peaking_value;
+
+    while (tok == '.' || tok == '[') {
+        _lex_next(state);
+        if (tok == '.') {
+            tok = _lex_next(state);
+            if (tok != TOK_ID) {
+                parse_expect_error(state, "identifier", tok);
+                return;
+            }
+
+            CString *string = (CString*)state->peaking_value;
+            key_reg = _parse_allocate_register(state);
+            _parse_push_inst(
+                state,
+                cvm_inst_new_i_type(
+                    I_LSTR,
+                    key_reg,
+                    (intptr_t)string
+                )
+            );
+        }
+        else {
+            key_reg = _parse_right_hand_expr(state);
+            tok = _lex_next(state);
+            if (tok != ']') {
+                parse_expect_error(state, "']'", tok);
+                return;
+            }
+        }
+
+        tok = _lex_peak(state);
+        if (tok != '.' && tok != '[') {
+            break;
+        }
+        else {
+            size_t temp_reg = _parse_allocate_register(state);
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_GET_OBJ,
+                    temp_reg,
+                    this_reg,
+                    key_reg
+                )
+            );
+            key_reg = 0;
+            this_reg = temp_reg;
+        }
     }
 
     tok = _lex_next(state);
@@ -1014,11 +1072,24 @@ _parse_assignment_expr(ParseState *state)
         result_reg = temp_reg;
     }
 
-    if (_parse_find_define_scope(state, literal) == scope_stack_top(state)) {
-        _parse_define_into_scope(scope_stack_top(state), literal, result_reg);
+    if (key_reg) {
+        _parse_push_inst(
+            state,
+            cvm_inst_new_d_type(
+                I_SET_OBJ,
+                this_reg,
+                result_reg,
+                key_reg
+            )
+        );
     }
     else {
-        _parse_insert_into_scope(scope_stack_top(state), literal, result_reg);
+        if (_parse_find_define_scope(state, literal) == scope_stack_top(state)) {
+            _parse_define_into_scope(scope_stack_top(state), literal, result_reg);
+        }
+        else {
+            _parse_insert_into_scope(scope_stack_top(state), literal, result_reg);
+        }
     }
 }
 
