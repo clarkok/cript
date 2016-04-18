@@ -620,9 +620,136 @@ _parse_compare_expr(ParseState *state)
 }
 
 size_t
+_parse_logic_and_expr(ParseState *state)
+{
+    size_t ret = _parse_compare_expr(state);
+
+    int tok = _lex_peak(state);
+    if (tok == TOK_AND) {
+        size_t temp_reg = _parse_allocate_register(state);
+        size_t last_index = 0;
+        size_t current_index = 0;
+
+        while (tok == TOK_AND) {
+            _lex_next(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_ADD,
+                    temp_reg,
+                    ret,
+                    0
+                )
+            );
+            current_index = state->inst_list->count;
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_i_type(
+                    I_BNR,
+                    ret,
+                    last_index
+                )
+            );
+            last_index = current_index;
+
+            ret = _parse_compare_expr(state);
+            tok = _lex_peak(state);
+        }
+
+        inst_list_push(
+            state->inst_list,
+            cvm_inst_new_d_type(
+                I_ADD,
+                temp_reg,
+                ret,
+                0
+            )
+        );
+
+        while (last_index) {
+            current_index = last_index;
+            last_index = state->inst_list->insts[current_index].i_imm;
+            state->inst_list->insts[current_index].i_imm =
+                state->inst_list->count - current_index - 1;
+        }
+
+        ret = temp_reg;
+    }
+    return ret;
+}
+
+size_t
+_parse_logic_or_expr(ParseState *state)
+{
+    size_t ret = _parse_logic_and_expr(state);
+
+    int tok = _lex_peak(state);
+    if (tok == TOK_OR) {
+        size_t temp_reg = _parse_allocate_register(state);
+        size_t last_index = 0;
+        size_t current_index = 0;
+
+        while (tok == TOK_OR) {
+            _lex_next(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_ADD,
+                    temp_reg,
+                    ret,
+                    0
+                )
+            );
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_LNOT,
+                    ret,
+                    ret,
+                    0
+                )
+            );
+            current_index = state->inst_list->count;
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_i_type(
+                    I_BNR,
+                    ret,
+                    last_index
+                )
+            );
+            last_index = current_index;
+
+            ret = _parse_compare_expr(state);
+            tok = _lex_peak(state);
+        }
+
+        inst_list_push(
+            state->inst_list,
+            cvm_inst_new_d_type(
+                I_ADD,
+                temp_reg,
+                ret,
+                0
+            )
+        );
+
+        while (last_index) {
+            current_index = last_index;
+            last_index = state->inst_list->insts[current_index].i_imm;
+            state->inst_list->insts[current_index].i_imm =
+                state->inst_list->count - current_index - 1;
+        }
+
+        ret = temp_reg;
+    }
+    return ret;
+}
+
+size_t
 _parse_conditional_expr(ParseState *state)
 {
-    return _parse_compare_expr(state);
+    return _parse_logic_or_expr(state);
 }
 
 size_t

@@ -38,7 +38,7 @@ output_inst(FILE *fout, Inst inst)
             fprintf(fout, "%d\n", inst.i_imm);
             break;
         case I_LNOT:
-            fprintf(fout, "$%d,\t$%d", inst.i_rd, inst.i_rs);
+            fprintf(fout, "$%d,\t$%d\n", inst.i_rd, inst.i_rs);
             break;
         default:
             fprintf(fout, "\n");
