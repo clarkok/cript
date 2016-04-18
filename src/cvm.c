@@ -20,6 +20,9 @@ cvm_state_new(InstList *inst_list, StringPool *string_pool)
     vm->inst_list = inst_list;
     vm->pc = 0;
     vm->regs[0] = value_from_int(0);
+    for (size_t i = 1; i < 65536; ++i) {
+        vm->regs[i] = value_undefined();
+    }
     return vm;
 }
 
@@ -50,9 +53,11 @@ static inline Hash *
 _cvm_allocate_new_object(VMState *vm, size_t capacity)
 {
     Hash *hash = young_gen_new_hash(vm->young_gen, capacity);
-    if (!hash) { cvm_young_gc(vm); }
-    hash = young_gen_new_hash(vm->young_gen, capacity);
-    if (!hash) { error_f("Out of memory when allocating object of capacity %d", capacity); }
+    if (!hash) {
+        cvm_young_gc(vm);
+        hash = young_gen_new_hash(vm->young_gen, capacity);
+        if (!hash) { error_f("Out of memory when allocating object of capacity %d", capacity); }
+    }
     return hash;
 }
 

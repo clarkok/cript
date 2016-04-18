@@ -719,6 +719,32 @@ parse_object_set_test(CuTest *tc)
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
+}
+
+void
+parse_try_gc_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let i = 300000;\n"
+        "while (i > 0) {\n"
+        "  let a = {};\n"
+        "  i = i - 1;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+
     (void)tc;
 }
 
@@ -746,6 +772,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_string_test);
     SUITE_ADD_TEST(suite, parse_object_test);
     SUITE_ADD_TEST(suite, parse_object_set_test);
+    SUITE_ADD_TEST(suite, parse_try_gc_test);
 
     return suite;
 }
