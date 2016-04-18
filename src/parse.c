@@ -150,6 +150,51 @@ _lex_parse_line_comment(ParseState *state)
     }
 }
 
+void
+_lex_parse_string(ParseState *state)
+{
+    char buffer[256],
+         *ptr = buffer,
+         start = *(state->current);
+
+    state->current++;
+    state->column++;
+
+    while (state->current != state->limit && *(state->current) != start) {
+        char ch = *(state->current++);
+        state->column++;
+        if (ch == '\n') {
+            state->line++;
+            state->column = 0;
+        }
+        else if (ch == '\\') {
+            switch (*(state->current)) {
+                default:
+                    ch = *(state->current++);
+                    state->column++;
+                    break;
+            }
+        }
+        *ptr = ch;
+        if (++ptr - buffer == 256) {
+            parse_error(state, "%s", "string too long");
+            return;
+        }
+    }
+
+    if (state->current == state->limit) {
+        parse_error(state, "%s", "uncompleted string literal");
+        return;
+    }
+
+    state->current++;
+    state->column++;
+    *ptr = 0;
+
+    state->peaking_token = TOK_STRING;
+    state->peaking_value = (size_t)string_pool_insert_vec(&state->string_pool, buffer, ptr - buffer);
+}
+
 int
 _lex_peak(ParseState *state)
 {
@@ -178,6 +223,9 @@ _lex_peak(ParseState *state)
         }
         else if (isalpha(*(state->current))) {
             _lex_parse_identifier(state);
+        }
+        else if (*(state->current) == '"' || *(state->current) == '\'') {
+            _lex_parse_string(state);
         }
         else if (*(state->current) == '/') {
             if (state->current + 1 == state->limit) {
@@ -425,6 +473,18 @@ _parse_unary_expr(ParseState *state)
                 state->inst_list,
                 cvm_inst_new_i_type(
                     I_LI,
+                    ret,
+                    state->peaking_value
+                )
+            );
+            _lex_next(state);
+            break;
+        case TOK_STRING:
+            ret = _parse_allocate_register(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_i_type(
+                    I_LSTR,
                     ret,
                     state->peaking_value
                 )

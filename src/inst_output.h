@@ -9,6 +9,8 @@
 
 #include "inst.h"
 #include "inst_list.h"
+#include "value.h"
+#include "string_pool.h"
 
 extern const char INST_NAME[];
 
@@ -30,8 +32,6 @@ output_inst(FILE *fout, Inst inst)
         case I_SEQ:
         case I_SLT:
         case I_SLE:
-        case I_LAND:
-        case I_LOR:
             fprintf(fout, "$%d,\t$%d,\t$%d\n", inst.i_rd, inst.i_rs, inst.i_rt);
             break;
         case I_J:
@@ -40,6 +40,12 @@ output_inst(FILE *fout, Inst inst)
         case I_LNOT:
             fprintf(fout, "$%d,\t$%d\n", inst.i_rd, inst.i_rs);
             break;
+        case I_LSTR:
+        {
+            CString *string = (CString*)(inst.i_imm);
+            fprintf(fout, "$%d,\t\"%.*s\"\n", inst.i_rd, string->length, string->content);
+            break;
+        }
         default:
             fprintf(fout, "\n");
             break;

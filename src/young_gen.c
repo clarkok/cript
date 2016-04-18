@@ -87,17 +87,23 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
         total_size
     );
 
+    hash->type = HT_REDIRECT;
     hash->capacity = 0;
     hash->size = (size_t)*target;
 
     hash_for_each(*target, node) {
         if (value_is_ptr(node->value)) {
             Hash *child_hash = value_to_ptr(node->value);
-            if (!child_hash->capacity) {
-                node->value = value_from_ptr((Hash*)child_hash->size);
-            }
-            else {
-                young_gen_gc_mark(young_gen, (Hash**)(&node->value));
+
+            switch (child_hash->type) {
+                case HT_OBJECT:
+                    young_gen_gc_mark(young_gen, (Hash**)(&node->value));
+                    break;
+                case HT_REDIRECT:
+                    node->value = value_from_ptr((Hash*)child_hash->size);
+                    break;
+                default:
+                    assert(0);
             }
         }
     }

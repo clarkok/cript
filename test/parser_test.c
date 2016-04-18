@@ -618,6 +618,40 @@ parse_fibonacci_test(CuTest *tc)
     parse_state_destroy(state);
 }
 
+void
+parse_string_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 'hello world';\n"
+        "let b = \"hello world!\";\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+    intptr_t reg_b = get_reg_from_parse_state(state, "b");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CString *string;
+
+    string = value_to_string(get_reg_value_from_vm(vm, reg_a));
+    CuAssertTrue(tc, string->length);
+    CuAssertIntEquals(tc, 0, strncmp("hello world", string->content, string->length));
+
+    string = value_to_string(get_reg_value_from_vm(vm, reg_b));
+    CuAssertTrue(tc, string->length);
+    CuAssertIntEquals(tc, 0, strncmp("hello world!", string->content, string->length));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
 CuSuite *
 parse_test_suite(void)
 {
@@ -639,6 +673,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_logic_and_expr_test);
     SUITE_ADD_TEST(suite, parse_logic_or_expr_test);
     SUITE_ADD_TEST(suite, parse_fibonacci_test);
+    SUITE_ADD_TEST(suite, parse_string_test);
 
     return suite;
 }

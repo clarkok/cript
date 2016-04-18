@@ -15,8 +15,15 @@ typedef struct HashNode
     Value value;
 } HashNode;
 
+enum HashType
+{
+    HT_OBJECT,
+    HT_REDIRECT
+};
+
 typedef struct Hash
 {
+    int type;
     size_t capacity;
     size_t size;
     HashNode content[0];

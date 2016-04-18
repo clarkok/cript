@@ -30,6 +30,7 @@ hash_init(void *hash, size_t capacity)
     if (!hash) return NULL;
 
     Hash *ret = hash;
+    ret->type = HT_OBJECT;
     ret->capacity = capacity;
     ret->size = 0;
     memset((char*)ret + sizeof(Hash), 0, _hash_content_size(capacity));

@@ -14,9 +14,12 @@
 #include "inst.h"
 #include "inst_list.h"
 
+typedef struct YoungGen YoungGen;
+
 typedef struct VMState
 {
     StringPool *string_pool;
+    YoungGen *young_gen;
 
     InstList *inst_list;
     size_t pc;

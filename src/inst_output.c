@@ -2,6 +2,8 @@
 // Created by c on 4/17/16.
 //
 
+#include <assert.h>
+
 #include "inst_output.h"
 
 const char INST_NAME[] =
@@ -18,12 +20,12 @@ const char INST_NAME[] =
     "sle     "
 
     "lnot    "
-    "land    "
-    "lor     "
 
     "bnr     "
     "j       "
     "jal     "
+
+    "lstr    "
 ;
 
-_Static_assert(8 * INST_NR + 1 == sizeof(INST_NAME), "Keep INST_NAME synced with insts");
+static_assert(8 * INST_NR + 1 == sizeof(INST_NAME), "Keep INST_NAME synced with insts");

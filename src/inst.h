@@ -20,12 +20,12 @@ enum InstType
     I_SLE,
 
     I_LNOT,
-    I_LAND,
-    I_LOR,
 
     I_BNR,
     I_J,
     I_JAL,
+
+    I_LSTR,
 
     INST_NR
 };
