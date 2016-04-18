@@ -32,6 +32,8 @@ output_inst(FILE *fout, Inst inst)
         case I_SEQ:
         case I_SLT:
         case I_SLE:
+        case I_SET_OBJ:
+        case I_GET_OBJ:
             fprintf(fout, "$%d,\t$%d,\t$%d\n", inst.i_rd, inst.i_rs, inst.i_rt);
             break;
         case I_J:
@@ -46,6 +48,9 @@ output_inst(FILE *fout, Inst inst)
             fprintf(fout, "$%d,\t\"%.*s\"\n", inst.i_rd, string->length, string->content);
             break;
         }
+        case I_NEW_OBJ:
+            fprintf(fout, "$%d\n", inst.i_rd);
+            break;
         default:
             fprintf(fout, "\n");
             break;

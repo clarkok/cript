@@ -91,19 +91,23 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
     hash->capacity = 0;
     hash->size = (size_t)*target;
 
+    // TODO shrink hash table when moving it
     hash_for_each(*target, node) {
         if (value_is_ptr(node->value)) {
             Hash *child_hash = value_to_ptr(node->value);
 
-            switch (child_hash->type) {
-                case HT_OBJECT:
-                    young_gen_gc_mark(young_gen, (Hash**)(&node->value));
-                    break;
-                case HT_REDIRECT:
-                    node->value = value_from_ptr((Hash*)child_hash->size);
-                    break;
-                default:
-                    assert(0);
+            while (child_hash->type == HT_REDIRECT) {
+                child_hash = (Hash*)child_hash->size;
+            }
+
+            if ((YoungGenBlock*)((size_t)child_hash & -YOUNG_GEN_BLOCK_SIZE) == young_gen->current) {
+                switch (child_hash->type) {
+                    case HT_OBJECT:
+                        young_gen_gc_mark(young_gen, (Hash**)(&node->value));
+                        break;
+                    default:
+                        assert(0);
+                }
             }
         }
     }

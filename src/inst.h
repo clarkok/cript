@@ -27,6 +27,10 @@ enum InstType
 
     I_LSTR,
 
+    I_NEW_OBJ,
+    I_SET_OBJ,  // $rd is the ref to a obj, $rs is the new value, $rt is the key
+    I_GET_OBJ,  // $rd is the dst register, $rs is the ref to a obj, $rt is the key
+
     INST_NR
 };
 

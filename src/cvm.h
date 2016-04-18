@@ -44,4 +44,6 @@ void cvm_state_destroy(VMState *vm);
 Value cvm_get_register(VMState *vm, unsigned int reg_id);
 void cvm_set_register(VMState *vm, unsigned int reg_id, Value value);
 
+void cvm_young_gc(VMState *vm);
+
 #endif //CRIPT_CVM_H

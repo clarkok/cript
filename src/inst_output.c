@@ -26,6 +26,10 @@ const char INST_NAME[] =
     "jal     "
 
     "lstr    "
+
+    "newobj  "
+    "setobj  "
+    "getobj  "
 ;
 
 static_assert(8 * INST_NR + 1 == sizeof(INST_NAME), "Keep INST_NAME synced with insts");

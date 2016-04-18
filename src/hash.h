@@ -84,4 +84,6 @@ Hash *hash_expand(Hash *hash);
  */
 Hash *hash_shrink(Hash *hash);
 
+void hash_rehash(Hash *dst, Hash *src);
+
 #endif //CRIPT_HASH_H

@@ -100,8 +100,8 @@ hash_set(Hash *hash, uintptr_t key, Value value)
     hash->content[slot].key = key;
 }
 
-static inline void
-_hash_rehash(Hash *dst, Hash *src)
+void
+hash_rehash(Hash *dst, Hash *src)
 {
     HashNode *ptr, *limit;
     for (
@@ -118,7 +118,7 @@ Hash *
 hash_expand(Hash *hash)
 {
     Hash *ret = hash_new(_hash_expand_size(hash));
-    _hash_rehash(ret, hash);
+    hash_rehash(ret, hash);
     return ret;
 }
 
@@ -126,7 +126,7 @@ Hash *
 hash_shrink(Hash *hash)
 {
     Hash *ret = hash_new(_hash_shrink_size(hash));
-    _hash_rehash(ret, hash);
+    hash_rehash(ret, hash);
     return ret;
 }
 
