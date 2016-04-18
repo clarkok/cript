@@ -453,6 +453,87 @@ _parse_inject_reserved(ParseState *state, CString *reserved[])
 size_t _parse_right_hand_expr(ParseState *state);
 
 size_t
+_parse_object_literal(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == '{');
+
+    size_t ret = _parse_allocate_register(state);
+    inst_list_push(
+        state->inst_list,
+        cvm_inst_new_d_type(
+            I_NEW_OBJ,
+            ret,
+            0, 0
+        )
+    );
+
+    tok = _lex_peak(state);
+    if (tok == TOK_EOF) {
+        parse_error(state, "%s", "unexpected EOF");
+        return 0;
+    }
+
+    if (tok != '}') {
+        size_t key_reg = _parse_allocate_register(state);
+        while (1) {
+            tok = _lex_next(state);
+            if (tok != TOK_ID && tok != TOK_STRING) {
+                parse_expect_error(state, "id or string", tok);
+                return 0;
+            }
+
+            CString *string = (CString*)state->peaking_value;
+
+            if ((tok = _lex_next(state)) != ':') {
+                parse_expect_error(state, "':'", tok);
+                return 0;
+            }
+
+            size_t value_reg = _parse_right_hand_expr(state);
+
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_i_type(
+                    I_LSTR,
+                    key_reg,
+                    (intptr_t)string
+                )
+            );
+
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_SET_OBJ,
+                    ret,
+                    value_reg,
+                    key_reg
+                )
+            );
+
+            tok = _lex_peak(state);
+            if (tok == TOK_EOF) {
+                parse_error(state, "%s", "Unexpected EOF");
+                return 0;
+            }
+            else if (tok == ',') {
+                _lex_next(state);
+            }
+            else if (tok == '}') {
+                break;
+            }
+            else {
+                parse_expect_error(state, "',' or '}'", tok);
+            }
+        }
+    }
+
+    _lex_next(state);   // for '}'
+
+    return ret;
+}
+
+size_t
 _parse_unary_expr(ParseState *state)
 {
     int tok = _lex_peak(state);
@@ -509,6 +590,9 @@ _parse_unary_expr(ParseState *state)
             ret = (size_t)reg;
             break;
         }
+        case '{':
+            ret = _parse_object_literal(state);
+            break;
         default:
             parse_expect_error(state, "unary expr", tok);
             break;
@@ -518,14 +602,78 @@ _parse_unary_expr(ParseState *state)
 }
 
 size_t
-_parse_mul_expr(ParseState *state)
+_parse_postfix_expr(ParseState *state)
 {
     size_t ret = _parse_unary_expr(state);
 
     int tok = _lex_peak(state);
+    while (tok == '.' || tok == '[') {
+        _lex_next(state);
+
+        if (tok == '.') {
+            tok = _lex_next(state);
+            if (tok != TOK_ID) {
+                parse_expect_error(state, "identifier", tok);
+                return 0;
+            }
+
+            size_t key_reg = _parse_allocate_register(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_i_type(
+                    I_LSTR,
+                    key_reg,
+                    state->peaking_value
+                )
+            );
+
+            size_t temp_reg = _parse_allocate_register(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_GET_OBJ,
+                    temp_reg,
+                    ret,
+                    key_reg
+                )
+            );
+
+            ret = temp_reg;
+        }
+        else {
+            size_t key_reg = _parse_right_hand_expr(state);
+            size_t temp_reg = _parse_allocate_register(state);
+            inst_list_push(
+                state->inst_list,
+                cvm_inst_new_d_type(
+                    I_GET_OBJ,
+                    temp_reg,
+                    ret,
+                    key_reg
+                )
+            );
+            tok = _lex_next(state);
+            if (tok != ']') {
+                parse_expect_error(state, "']'", tok);
+                return 0;
+            }
+        }
+
+        tok = _lex_peak(state);
+    }
+
+    return ret;
+}
+
+size_t
+_parse_mul_expr(ParseState *state)
+{
+    size_t ret = _parse_postfix_expr(state);
+
+    int tok = _lex_peak(state);
     while (tok == '*' || tok == '/' || tok == '%') {
         _lex_next(state);
-        size_t b_reg = _parse_unary_expr(state);
+        size_t b_reg = _parse_postfix_expr(state);
         size_t temp_reg = _parse_allocate_register(state);
 
         inst_list_push(

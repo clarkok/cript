@@ -652,6 +652,38 @@ parse_string_test(CuTest *tc)
     parse_state_destroy(state);
 }
 
+void
+parse_object_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = {};\n"
+        "let b = {\n"
+        "  a : 1,\n"
+        "  b : 2\n"
+        "};\n"
+        "let c = {c : 3};\n"
+        "let d = b.a;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    intptr_t reg_d = get_reg_from_parse_state(state, "d");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+    (void)tc;
+}
+
 CuSuite *
 parse_test_suite(void)
 {
@@ -674,6 +706,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_logic_or_expr_test);
     SUITE_ADD_TEST(suite, parse_fibonacci_test);
     SUITE_ADD_TEST(suite, parse_string_test);
+    SUITE_ADD_TEST(suite, parse_object_test);
 
     return suite;
 }
