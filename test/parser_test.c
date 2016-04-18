@@ -748,6 +748,76 @@ parse_try_gc_test(CuTest *tc)
     (void)tc;
 }
 
+void
+parse_array_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = [];\n"
+        "let b = [\n"
+        "  1,\n"
+        "  2\n"
+        "];\n"
+        "let c = [3 : 1];\n"
+        "let d = b[0];\n"
+        "let e = c[3];\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+
+    intptr_t reg_d = get_reg_from_parse_state(state, "d");
+    intptr_t reg_e = get_reg_from_parse_state(state, "e");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+    (void)tc;
+}
+
+void
+parse_array_set_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = [];\n"
+        "let b = [\n"
+        "  1,\n"
+        "  2\n"
+        "];\n"
+        "let c = [3 : 1];\n"
+        "c[1] = 4;\n"
+        "let d = c[1];\n"
+        "c[1] = 5;\n"
+        "let e = c[1];\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    intptr_t reg_d = get_reg_from_parse_state(state, "d");
+    intptr_t reg_e = get_reg_from_parse_state(state, "e");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+    CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
 CuSuite *
 parse_test_suite(void)
 {
@@ -773,6 +843,8 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_object_test);
     SUITE_ADD_TEST(suite, parse_object_set_test);
     SUITE_ADD_TEST(suite, parse_try_gc_test);
+    SUITE_ADD_TEST(suite, parse_array_test);
+    SUITE_ADD_TEST(suite, parse_array_set_test);
 
     return suite;
 }

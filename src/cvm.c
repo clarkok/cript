@@ -52,11 +52,23 @@ cvm_get_register(VMState *vm, unsigned int reg_id)
 static inline Hash *
 _cvm_allocate_new_object(VMState *vm, size_t capacity)
 {
-    Hash *hash = young_gen_new_hash(vm->young_gen, capacity);
+    Hash *hash = young_gen_new_hash(vm->young_gen, capacity, HT_OBJECT);
     if (!hash) {
         cvm_young_gc(vm);
-        hash = young_gen_new_hash(vm->young_gen, capacity);
+        hash = young_gen_new_hash(vm->young_gen, capacity, HT_OBJECT);
         if (!hash) { error_f("Out of memory when allocating object of capacity %d", capacity); }
+    }
+    return hash;
+}
+
+static inline Hash *
+_cvm_allocate_new_array(VMState *vm, size_t capacity)
+{
+    Hash *hash = young_gen_new_hash(vm->young_gen, capacity, HT_ARRAY);
+    if (!hash) {
+        cvm_young_gc(vm);
+        hash = young_gen_new_hash(vm->young_gen, capacity, HT_ARRAY);
+        if (!hash) { error_f("Out of memory when allocating array of capacity %d", capacity); }
     }
     return hash;
 }
@@ -65,8 +77,11 @@ static inline Hash *
 _cvm_get_hash_in_register(VMState *vm, size_t reg)
 {
     Hash *hash = value_to_ptr(cvm_get_register(vm, reg));
-    while(hash->type == HT_REDIRECT) {
-        hash = (Hash*)(hash->size);
+    if (hash->type == HT_REDIRECT) {
+        while(hash->type == HT_REDIRECT) {
+            hash = (Hash*)(hash->size);
+        }
+        cvm_set_register(vm, reg, value_from_ptr(hash));
     }
     return hash;
 }
@@ -215,13 +230,33 @@ cvm_state_run(VMState *vm)
                 );
                 break;
             }
+            case I_NEW_ARR:
+            {
+                Hash *new_arr = _cvm_allocate_new_array(vm, HASH_MIN_CAPACITY);
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_ptr(new_arr)
+                );
+                break;
+            }
             case I_SET_OBJ:
             {
                 Hash *obj = _cvm_get_hash_in_register(vm, inst.i_rd);
-                CString *key = value_to_string(cvm_get_register(vm, inst.i_rt));
+                uintptr_t key;
+                if (obj->type == HT_OBJECT) {
+                    key = (uintptr_t)value_to_string(cvm_get_register(vm, inst.i_rt));
+                }
+                else {
+                    key = (uintptr_t)value_to_int(cvm_get_register(vm, inst.i_rt));
+                }
                 hash_set(obj, (uintptr_t)key, cvm_get_register(vm, inst.i_rs));
                 if (hash_need_expand(obj)) {
-                    Hash *new_obj = _cvm_allocate_new_object(vm, _hash_expand_size(obj));    // may trigger gc
+                    // may trigger GC
+                    Hash *new_obj = 
+                        obj->type == HT_OBJECT
+                            ? _cvm_allocate_new_object(vm, _hash_expand_size(obj))
+                            : _cvm_allocate_new_array(vm, _hash_expand_size(obj));
+
                     obj = _cvm_get_hash_in_register(vm, inst.i_rd);
                     hash_rehash(new_obj, obj);
 
@@ -234,10 +269,16 @@ cvm_state_run(VMState *vm)
             case I_GET_OBJ:
             {
                 Hash *obj = _cvm_get_hash_in_register(vm, inst.i_rs);
-                CString *key = value_to_string(cvm_get_register(vm, inst.i_rt));
+                uintptr_t key;
+                if (obj->type == HT_OBJECT) {
+                    key = (uintptr_t)value_to_string(cvm_get_register(vm, inst.i_rt));
+                }
+                else {
+                    key = (uintptr_t)value_to_int(cvm_get_register(vm, inst.i_rt));
+                }
                 cvm_set_register(
                     vm, inst.i_rd,
-                    hash_find(obj, (uintptr_t)key)
+                    hash_find(obj, key)
                 );
                 break;
             }

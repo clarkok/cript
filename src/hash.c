@@ -21,16 +21,16 @@ Hash *
 hash_new(size_t capacity)
 {
     if (capacity < HASH_MIN_CAPACITY)   capacity = HASH_MIN_CAPACITY;
-    return hash_init(malloc(_hash_total_size(capacity)), capacity);
+    return hash_init(malloc(_hash_total_size(capacity)), capacity, HT_OBJECT);
 }
 
 Hash *
-hash_init(void *hash, size_t capacity)
+hash_init(void *hash, size_t capacity, int type)
 {
     if (!hash) return NULL;
 
     Hash *ret = hash;
-    ret->type = HT_OBJECT;
+    ret->type = type;
     ret->capacity = capacity;
     ret->size = 0;
     memset((char*)ret + sizeof(Hash), 0, _hash_content_size(capacity));

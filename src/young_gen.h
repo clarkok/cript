@@ -25,12 +25,13 @@ typedef struct YoungGen
 YoungGen *young_gen_new();
 void young_gen_destroy(YoungGen *young_gen);
 
-Hash *young_gen_new_hash(YoungGen *young_gen, size_t capacity);
+Hash *young_gen_new_hash(YoungGen *young_gen, size_t capacity, int type);
 
 void young_gen_gc_start(YoungGen *young_gen);
 void young_gen_gc_mark(YoungGen *young_gen, Hash **target);
 void young_gen_gc_end(YoungGen *young_gen);
 
 size_t young_gen_heap_size(YoungGen *young_gen);
+size_t young_gen_object_nr(YoungGen *young_gen);
 
 #endif // CRIPT_YOUNG_GC_H

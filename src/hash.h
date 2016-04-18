@@ -18,7 +18,9 @@ typedef struct HashNode
 enum HashType
 {
     HT_OBJECT,
-    HT_REDIRECT
+    HT_ARRAY,
+    HT_REDIRECT,
+    HT_GC_LEFT,
 };
 
 typedef struct Hash

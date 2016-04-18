@@ -49,6 +49,7 @@ output_inst(FILE *fout, Inst inst)
             break;
         }
         case I_NEW_OBJ:
+        case I_NEW_ARR:
             fprintf(fout, "$%d\n", inst.i_rd);
             break;
         default:

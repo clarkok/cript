@@ -3,6 +3,7 @@
 //
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <error.h>
 
 #include "young_gen.h"
@@ -12,6 +13,7 @@
 struct YoungGenBlock
 {
     size_t allocated;
+    size_t object_count;
     char content[0];
 };
 
@@ -20,6 +22,7 @@ _young_gen_block_new()
 {
     YoungGenBlock *ret = (YoungGenBlock*)aligned_alloc(YOUNG_GEN_BLOCK_SIZE, YOUNG_GEN_BLOCK_SIZE);
     ret->allocated = sizeof(YoungGenBlock);
+    ret->object_count = 0;
     return ret;
 }
 
@@ -54,20 +57,27 @@ _young_gen_allocate(YoungGenBlock *block, size_t size)
     }
     void *ret = block->content + block->allocated;
     block->allocated += size;
+    block->object_count ++;
     return ret;
 }
 
 Hash *
-young_gen_new_hash(YoungGen *young_gen, size_t capacity)
+young_gen_new_hash(YoungGen *young_gen, size_t capacity, int type)
 {
     size_t hash_total_size = _hash_total_size(capacity);
-    return hash_init(_young_gen_allocate(young_gen->current, hash_total_size), capacity);
+    return hash_init(
+            _young_gen_allocate(young_gen->current, hash_total_size),
+            capacity, type
+        );
 }
 
 void
 young_gen_gc_start(YoungGen *young_gen)
 {
-    info_f("start young gen gc, current heap size %d", young_gen_heap_size(young_gen));
+    info_f("start young gen gc, current heap size %d, object count %d",
+            young_gen_heap_size(young_gen),
+            young_gen_object_nr(young_gen)
+    );
     young_gen->gc_start_time = clock();
 }
 
@@ -80,18 +90,25 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
         return;
     }
 
-    size_t total_size = _hash_total_size(hash->capacity);
-    memcpy(
-        (*target = _young_gen_allocate(young_gen->replacement, total_size)),
-        hash,
-        total_size
-    );
+    if (hash_need_shrink(hash)) {
+        size_t new_size = _hash_total_size(_hash_shrink_size(hash));
+        *target = _young_gen_allocate(young_gen->replacement, new_size);
+        hash_init(*target, _hash_shrink_size(hash), hash->type);
+        hash_rehash(*target, hash);
+    }
+    else {
+        size_t total_size = _hash_total_size(hash->capacity);
+        memcpy(
+            (*target = _young_gen_allocate(young_gen->replacement, total_size)),
+            hash,
+            total_size
+        );
+    }
 
-    hash->type = HT_REDIRECT;
+    hash->type = HT_GC_LEFT;
     hash->capacity = 0;
     hash->size = (size_t)*target;
 
-    // TODO shrink hash table when moving it
     hash_for_each(*target, node) {
         if (value_is_ptr(node->value)) {
             Hash *child_hash = value_to_ptr(node->value);
@@ -100,9 +117,10 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
                 child_hash = (Hash*)child_hash->size;
             }
 
-            if ((YoungGenBlock*)((size_t)child_hash & -YOUNG_GEN_BLOCK_SIZE) == young_gen->current) {
+            if (child_hash->type != HT_GC_LEFT) {
                 switch (child_hash->type) {
                     case HT_OBJECT:
+                    case HT_ARRAY:
                         young_gen_gc_mark(young_gen, (Hash**)(&node->value));
                         break;
                     default:
@@ -119,14 +137,21 @@ young_gen_gc_end(YoungGen *young_gen)
     YoungGenBlock *block = young_gen->current;
     young_gen->current = young_gen->replacement;
     young_gen->replacement = block;
-    young_gen->replacement->allocated = sizeof(YoungGenBlock);
 
-    info_f("completed young gen gc in %dms, current heap size %d",
-           clock() / (CLOCKS_PER_SEC / 1000),
-           young_gen_heap_size(young_gen)
+    young_gen->replacement->allocated = sizeof(YoungGenBlock);
+    young_gen->replacement->object_count = 0;
+
+    info_f("completed young gen gc in %dms, current heap size %d, object count %d",
+            (clock() - young_gen->gc_start_time) / (CLOCKS_PER_SEC / 1000),
+            young_gen_heap_size(young_gen),
+            young_gen_object_nr(young_gen)
     );
 }
 
 size_t
 young_gen_heap_size(YoungGen *young_gen)
 { return young_gen->current->allocated; }
+
+size_t
+young_gen_object_nr(YoungGen *young_gen)
+{ return young_gen->current->object_count; }

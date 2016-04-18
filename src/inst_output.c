@@ -28,6 +28,7 @@ const char INST_NAME[] =
     "lstr    "
 
     "newobj  "
+    "newarr  "
     "setobj  "
     "getobj  "
 ;

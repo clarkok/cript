@@ -8,7 +8,7 @@
 #include "hash.h"
 #include "hash_helper.h"
 
-Hash *hash_init(void *hash, size_t capacity);
+Hash *hash_init(void *hash, size_t capacity, int type);
 
 static inline size_t
 _hash_content_size(size_t capacity)
@@ -28,6 +28,6 @@ _hash_expand_size(Hash *hash)
 
 static inline size_t
 _hash_shrink_size(Hash *hash)
-{ return (hash->size + (hash->size >> 1)); }
+{ return hash->capacity >> 1; }
 
 #endif //CRIPT_HASH_INTERNAL_H

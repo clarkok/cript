@@ -537,6 +537,110 @@ _parse_object_literal(ParseState *state)
 }
 
 size_t
+_parse_array_literal(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == '[');
+
+    size_t ret = _parse_allocate_register(state);
+    _parse_push_inst(
+        state, 
+        cvm_inst_new_d_type(
+            I_NEW_ARR,
+            ret,
+            0, 0
+        )
+    );
+
+    tok = _lex_peak(state);
+    if (tok == TOK_EOF) {
+        parse_error(state, "%s", "unexpected EOF");
+        return 0;
+    }
+
+    if (tok != ']') {
+        size_t one_reg = _parse_allocate_register(state);
+        _parse_push_inst(
+            state,
+            cvm_inst_new_i_type(
+                I_LI,
+                one_reg,
+                1
+            )
+        );
+
+        size_t key_reg = _parse_allocate_register(state);
+        _parse_push_inst(
+            state,
+            cvm_inst_new_i_type(
+                I_LI,
+                key_reg,
+                0
+            )
+        );
+
+        while (1) {
+            size_t value_reg = _parse_right_hand_expr(state);
+            tok = _lex_peak(state);
+
+            if (tok == ':') {
+                _lex_next(state);
+                _parse_push_inst(
+                    state,
+                    cvm_inst_new_d_type(
+                        I_ADD,
+                        key_reg,
+                        value_reg,
+                        0
+                    )
+                );
+
+                value_reg = _parse_right_hand_expr(state);
+                tok = _lex_peak(state);
+            }
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_SET_OBJ,
+                    ret,
+                    value_reg,
+                    key_reg
+                )
+            );
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_ADD,
+                    key_reg,
+                    key_reg,
+                    one_reg
+                )
+            );
+
+            if (tok == TOK_EOF) {
+                parse_error(state, "%s", "unexpected EOF");
+                return 0;
+            }
+
+            if (tok == ']') {
+                break;
+            }
+            else if (tok == ',') {
+                _lex_next(state);
+            }
+            else {
+                parse_expect_error(state, "','", tok);
+            }
+        }
+    }
+    _lex_next(state);
+
+    return ret;
+}
+
+size_t
 _parse_unary_expr(ParseState *state)
 {
     int tok = _lex_peak(state);
@@ -595,6 +699,9 @@ _parse_unary_expr(ParseState *state)
         }
         case '{':
             ret = _parse_object_literal(state);
+            break;
+        case '[':
+            ret = _parse_array_literal(state);
             break;
         default:
             parse_expect_error(state, "unary expr", tok);

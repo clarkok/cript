@@ -11,6 +11,6 @@ _next_index(uintptr_t key, size_t capacity)
 
 static inline size_t
 _expand_size(size_t original_capacity)
-{ return (original_capacity + (original_capacity >> 1)); }
+{ return (original_capacity << 1); }
 
 #endif //CRIPT_HASH_HELPER_H
