@@ -65,6 +65,9 @@
                 break;                                                              \
         }
 
+#define _parse_push_inst(state, inst)                                               \
+    inst_list_push(state->inst_list, inst)
+
 
 void
 _lex_parse_number(ParseState *state)
@@ -406,7 +409,7 @@ _parse_join_scope(ParseState *state)
     list_unlink(list_head(&state->scope_stack));
 
     hash_for_each(scope->upper_table, node) {
-        inst_list_push(state->inst_list,
+        _parse_push_inst(state,
                        cvm_inst_new_d_type(
                            I_ADD,
                            (size_t)_parse_find_in_symbol_table(state, node->key),
@@ -459,8 +462,8 @@ _parse_object_literal(ParseState *state)
     assert(tok == '{');
 
     size_t ret = _parse_allocate_register(state);
-    inst_list_push(
-        state->inst_list,
+    _parse_push_inst(
+        state,
         cvm_inst_new_d_type(
             I_NEW_OBJ,
             ret,
@@ -492,8 +495,8 @@ _parse_object_literal(ParseState *state)
 
             size_t value_reg = _parse_right_hand_expr(state);
 
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_LSTR,
                     key_reg,
@@ -501,8 +504,8 @@ _parse_object_literal(ParseState *state)
                 )
             );
 
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_SET_OBJ,
                     ret,
@@ -550,8 +553,8 @@ _parse_unary_expr(ParseState *state)
             break;
         case TOK_NUM:
             ret = _parse_allocate_register(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_LI,
                     ret,
@@ -562,8 +565,8 @@ _parse_unary_expr(ParseState *state)
             break;
         case TOK_STRING:
             ret = _parse_allocate_register(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_LSTR,
                     ret,
@@ -618,8 +621,8 @@ _parse_postfix_expr(ParseState *state)
             }
 
             size_t key_reg = _parse_allocate_register(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_LSTR,
                     key_reg,
@@ -628,8 +631,8 @@ _parse_postfix_expr(ParseState *state)
             );
 
             size_t temp_reg = _parse_allocate_register(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_GET_OBJ,
                     temp_reg,
@@ -643,8 +646,8 @@ _parse_postfix_expr(ParseState *state)
         else {
             size_t key_reg = _parse_right_hand_expr(state);
             size_t temp_reg = _parse_allocate_register(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_GET_OBJ,
                     temp_reg,
@@ -676,8 +679,8 @@ _parse_mul_expr(ParseState *state)
         size_t b_reg = _parse_postfix_expr(state);
         size_t temp_reg = _parse_allocate_register(state);
 
-        inst_list_push(
-            state->inst_list,
+        _parse_push_inst(
+            state,
             cvm_inst_new_d_type(
                 tok == '*' ? I_MUL :
                 tok == '/' ? I_DIV :
@@ -706,8 +709,8 @@ _parse_add_expr(ParseState *state)
         size_t b_reg = _parse_mul_expr(state);
         size_t temp_reg = _parse_allocate_register(state);
 
-        inst_list_push(
-            state->inst_list,
+        _parse_push_inst(
+            state,
             cvm_inst_new_d_type(
                 tok == '+' ? I_ADD : I_SUB,
                 temp_reg,
@@ -743,8 +746,8 @@ _parse_compare_expr(ParseState *state)
 
         switch (tok) {
             case '<':
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SLT,
                         temp_reg,
@@ -754,8 +757,8 @@ _parse_compare_expr(ParseState *state)
                 );
                 break;
             case '>':
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SLT,
                         temp_reg,
@@ -765,8 +768,8 @@ _parse_compare_expr(ParseState *state)
                 );
                 break;
             case TOK_LE:
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SLE,
                         temp_reg,
@@ -776,8 +779,8 @@ _parse_compare_expr(ParseState *state)
                 );
                 break;
             case TOK_GE:
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SLE,
                         temp_reg,
@@ -787,8 +790,8 @@ _parse_compare_expr(ParseState *state)
                 );
                 break;
             case TOK_EQ:
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SEQ,
                         temp_reg,
@@ -798,8 +801,8 @@ _parse_compare_expr(ParseState *state)
                 );
                 break;
             case TOK_NE:
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_SEQ,
                         temp_reg,
@@ -807,8 +810,8 @@ _parse_compare_expr(ParseState *state)
                         ret
                     )
                 );
-                inst_list_push(
-                    state->inst_list,
+                _parse_push_inst(
+                    state,
                     cvm_inst_new_d_type(
                         I_LNOT,
                         temp_reg,
@@ -840,8 +843,8 @@ _parse_logic_and_expr(ParseState *state)
 
         while (tok == TOK_AND) {
             _lex_next(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_ADD,
                     temp_reg,
@@ -850,8 +853,8 @@ _parse_logic_and_expr(ParseState *state)
                 )
             );
             current_index = state->inst_list->count;
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_BNR,
                     ret,
@@ -864,8 +867,8 @@ _parse_logic_and_expr(ParseState *state)
             tok = _lex_peak(state);
         }
 
-        inst_list_push(
-            state->inst_list,
+        _parse_push_inst(
+            state,
             cvm_inst_new_d_type(
                 I_ADD,
                 temp_reg,
@@ -899,8 +902,8 @@ _parse_logic_or_expr(ParseState *state)
 
         while (tok == TOK_OR) {
             _lex_next(state);
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_ADD,
                     temp_reg,
@@ -908,8 +911,8 @@ _parse_logic_or_expr(ParseState *state)
                     0
                 )
             );
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_d_type(
                     I_LNOT,
                     ret,
@@ -918,8 +921,8 @@ _parse_logic_or_expr(ParseState *state)
                 )
             );
             current_index = state->inst_list->count;
-            inst_list_push(
-                state->inst_list,
+            _parse_push_inst(
+                state,
                 cvm_inst_new_i_type(
                     I_BNR,
                     ret,
@@ -932,8 +935,8 @@ _parse_logic_or_expr(ParseState *state)
             tok = _lex_peak(state);
         }
 
-        inst_list_push(
-            state->inst_list,
+        _parse_push_inst(
+            state,
             cvm_inst_new_d_type(
                 I_ADD,
                 temp_reg,
@@ -999,8 +1002,8 @@ _parse_assignment_expr(ParseState *state)
 
     if (scope_stack_top(state)->register_counter == reg_count) {
         size_t temp_reg = _parse_allocate_register(state);
-        inst_list_push(
-            state->inst_list,
+        _parse_push_inst(
+            state,
             cvm_inst_new_d_type(
                 I_ADD,
                 temp_reg,
@@ -1107,7 +1110,7 @@ _parse_if_else_stmt(ParseState *state)
     }
 
     size_t bnr_index = state->inst_list->count;
-    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
+    _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
 
     _parse_push_scope(state);
     _parse_statement(state);
@@ -1117,7 +1120,7 @@ _parse_if_else_stmt(ParseState *state)
     if (tok == TOK_ID && _parse_find_in_symbol_table(state, state->peaking_value) == -R_ELSE) {
         _lex_next(state);
         size_t j_index = state->inst_list->count;
-        inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, 0));
+        _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, 0));
 
         state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
         _parse_push_scope(state);
@@ -1153,12 +1156,12 @@ _parse_while_stmt(ParseState *state)
     }
 
     size_t bnr_index = state->inst_list->count;
-    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_BNR, reg, 0));
+    _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
 
     _parse_push_scope(state);
     _parse_statement(state);
     _parse_join_scope(state);
-    inst_list_push(state->inst_list, cvm_inst_new_i_type(I_J, 0, while_begin));
+    _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, while_begin));
 
     state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
 }
