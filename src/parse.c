@@ -668,7 +668,7 @@ _parse_logic_and_expr(ParseState *state)
 
         while (last_index) {
             current_index = last_index;
-            last_index = state->inst_list->insts[current_index].i_imm;
+            last_index = (size_t)state->inst_list->insts[current_index].i_imm;
             state->inst_list->insts[current_index].i_imm =
                 state->inst_list->count - current_index - 1;
         }
@@ -736,7 +736,7 @@ _parse_logic_or_expr(ParseState *state)
 
         while (last_index) {
             current_index = last_index;
-            last_index = state->inst_list->insts[current_index].i_imm;
+            last_index = (size_t)state->inst_list->insts[current_index].i_imm;
             state->inst_list->insts[current_index].i_imm =
                 state->inst_list->count - current_index - 1;
         }
@@ -786,7 +786,22 @@ _parse_assignment_expr(ParseState *state)
         return;
     }
 
+    size_t reg_count = scope_stack_top(state)->register_counter;
     size_t result_reg = _parse_right_hand_expr(state);
+
+    if (scope_stack_top(state)->register_counter == reg_count) {
+        size_t temp_reg = _parse_allocate_register(state);
+        inst_list_push(
+            state->inst_list,
+            cvm_inst_new_d_type(
+                I_ADD,
+                temp_reg,
+                result_reg,
+                0
+            )
+        );
+        result_reg = temp_reg;
+    }
 
     if (_parse_find_define_scope(state, literal) == scope_stack_top(state)) {
         _parse_define_into_scope(scope_stack_top(state), literal, result_reg);

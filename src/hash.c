@@ -8,6 +8,7 @@
 
 #include "hash.h"
 #include "hash_helper.h"
+#include "hash_internal.h"
 
 /**
  * Hash
@@ -16,35 +17,22 @@
  * if value in a slot is undefined, means this slot is deleted
  */
 
-static inline size_t
-_hash_content_size(size_t capacity)
-{ return capacity * sizeof(HashNode); }
-
-static inline uintptr_t
-_hash_next_index(uintptr_t key, size_t capacity)
-{ return _next_index(key, capacity); }
-
-static inline size_t
-_hash_expand_size(Hash *hash)
-{ return _expand_size(hash->capacity); }
-
-static inline size_t
-_hash_shrink_size(Hash *hash)
-{ return (hash->size + (hash->size >> 1)); }
-
 Hash *
 hash_new(size_t capacity)
 {
     if (capacity < HASH_MIN_CAPACITY)   capacity = HASH_MIN_CAPACITY;
+    return hash_init(malloc(_hash_total_size(capacity)), capacity);
+}
 
-    size_t content_size = _hash_content_size(capacity);
-    Hash *ret = malloc(sizeof(Hash) + content_size);
+Hash *
+hash_init(void *hash, size_t capacity)
+{
+    if (!hash) return NULL;
 
+    Hash *ret = hash;
     ret->capacity = capacity;
     ret->size = 0;
-
-    memset((char*)ret + sizeof(Hash), 0, content_size);
-
+    memset((char*)ret + sizeof(Hash), 0, _hash_content_size(capacity));
     return ret;
 }
 

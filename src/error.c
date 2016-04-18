@@ -42,5 +42,22 @@ warn_handle_f(const char *file, int line, const char *fmt, ...)
 
     va_start(args, fmt);
     vsnprintf(msg, MESSAGE_MAXIMUM_LENGTH, fmt, args);
-    error_handle(file, line, msg);
+    warn_handle(file, line, msg);
+}
+
+void
+info_handle(const char *file, int line, const char *msg)
+{
+    fprintf(stdout, "INFO: %s\n    thrown at %s:%d\n\n", msg, file, line);
+}
+
+void
+info_handle_f(const char *file, int line, const char *fmt, ...)
+{
+    char msg[MESSAGE_MAXIMUM_LENGTH];
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(msg, MESSAGE_MAXIMUM_LENGTH, fmt, args);
+    info_handle(file, line, msg);
 }

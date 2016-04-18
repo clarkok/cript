@@ -10,6 +10,7 @@ CuSuite *cvm_test_suite();
 CuSuite *hash_test_suite();
 CuSuite *cstring_test_suite();
 CuSuite *parse_test_suite();
+CuSuite *young_gen_test_suite();
 
 int
 main()
@@ -21,6 +22,7 @@ main()
     CuSuiteAddSuite(suite, hash_test_suite());
     CuSuiteAddSuite(suite, cstring_test_suite());
     CuSuiteAddSuite(suite, parse_test_suite());
+    CuSuiteAddSuite(suite, young_gen_test_suite());
 
     CuSuiteRun(suite);
     CuSuiteSummary(suite, output);

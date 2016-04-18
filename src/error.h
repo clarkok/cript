@@ -11,10 +11,16 @@
 #define warn_f(fmt, ...)    warn_handle_f(__FILE__, __LINE__, fmt, __VA_ARGS__)
 #define warn(msg)           warn_handle(__FILE__, __LINE__, msg);
 
+#define info_f(fmt, ...)    info_handle_f(__FILE__, __LINE__, fmt, __VA_ARGS__)
+#define info(msg)           info_handle(__FILE__, __LINE__, msg);
+
 void error_handle_f(const char *file, int line, const char *fmt, ...);
 void error_handle(const char *file, int line, const char *msg);
 
 void warn_handle_f(const char *file, int line, const char *fmt, ...);
 void warn_handle(const char *file, int line, const char *msg);
+
+void info_handle_f(const char *file, int line, const char *fmt, ...);
+void info_handle(const char *file, int line, const char *msg);
 
 #endif //CRIPT_ERROR_H

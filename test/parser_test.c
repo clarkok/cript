@@ -605,7 +605,6 @@ parse_fibonacci_test(CuTest *tc)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
