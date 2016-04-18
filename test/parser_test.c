@@ -569,7 +569,6 @@ parse_logic_or_expr_test(CuTest *tc)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -582,6 +581,39 @@ parse_logic_or_expr_test(CuTest *tc)
     CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
     CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_b)));
     CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_c)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_fibonacci_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 1,\n"
+        "    b = 1,\n"
+        "    n = 10;\n"
+        "while (n > 0) {\n"
+        "    let t = a + b;\n"
+        "    a = b;\n"
+        "    b = t;\n"
+        "    n = n - 1;\n"
+        "}\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
+
+    intptr_t reg_a = get_reg_from_parse_state(state, "a");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 89, value_to_int(get_reg_value_from_vm(vm, reg_a)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -607,6 +639,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_compare_expr_test);
     SUITE_ADD_TEST(suite, parse_logic_and_expr_test);
     SUITE_ADD_TEST(suite, parse_logic_or_expr_test);
+    SUITE_ADD_TEST(suite, parse_fibonacci_test);
 
     return suite;
 }
