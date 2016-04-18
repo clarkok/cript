@@ -6,6 +6,7 @@
 #define CRIPT_HASH_INTERNAL_H
 
 #include "hash.h"
+#include "hash_helper.h"
 
 Hash *hash_init(void *hash, size_t capacity);
 
