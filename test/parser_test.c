@@ -691,9 +691,14 @@ parse_try_gc_test(CuTest *tc)
 {
     static const char TEST_CONTENT[] =
         "let i = 300000;\n"
+        "let old_obj = { a : 0 };\n"
+        "let old_arr = [ 0 ];\n"
         "while (i > 0) {\n"
         "  let a = {};\n"
+        "  let b = [];\n"
         "  i = i - 1;\n"
+        "  old_obj.a = i;\n"
+        "  old_arr[0] = i;\n"
         "}\n"
     ;
 
@@ -849,8 +854,6 @@ parse_function_argument_test(CuTest *tc)
     parse(state);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
-
-    output_vm_state(stdout, vm);
 
     Value ret_val = cvm_state_run(vm);
 

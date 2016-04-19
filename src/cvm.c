@@ -9,7 +9,10 @@
 #include "young_gen.h"
 #include "hash_internal.h"
 
-#define type_error(vm, expected, actual)            \
+#define type_error(vm, expected)            \
+    error_f("%s", "TypeError: expected " expected)
+
+#define hash_type_error(vm, expected, actual)       \
     error_f("TypeError: expected %s, but met %s\n", \
         hash_type_to_str(expected),                 \
         hash_type_to_str(actual))
@@ -58,7 +61,11 @@ _cvm_allocate_new_array(VMState *vm, size_t capacity)
 static inline Hash *
 _cvm_get_hash_in_register(VMState *vm, size_t reg)
 {
-    Hash *hash = value_to_ptr(cvm_get_register(vm, reg));
+    Value val = cvm_get_register(vm, reg);
+    if (!value_is_ptr(val) || value_is_null(val)) {
+        type_error(vm, "Object");
+    }
+    Hash *hash = value_to_ptr(val);
     if (hash->type == HT_REDIRECT) {
         while(hash->type == HT_REDIRECT) {
             hash = (Hash*)(hash->size);
@@ -195,10 +202,12 @@ cvm_young_gc(VMState *vm)
 {
     young_gen_gc_start(vm->young_gen);
 
+    young_gen_gc_mark(vm->young_gen, &vm->global);
+
     list_for_each(&vm->frames, frame_node) {
         VMFrame *frame = list_get(frame_node, VMFrame, _linked);
         for (size_t i = 0; i <= frame->function->register_nr; ++i) {
-            if (value_is_ptr(frame->regs[i])) {
+            if (value_is_ptr(frame->regs[i]) && !value_is_null(frame->regs[i])) {
                 Hash *hash = value_to_ptr(frame->regs[i]);
                 while (hash->type == HT_REDIRECT) {
                     hash = (Hash*)hash->size;
@@ -416,7 +425,7 @@ cvm_state_run(VMState *vm)
                     }
                 }
                 else {
-                    type_error(vm, HT_LIGHTFUNC, func->type);
+                    hash_type_error(vm, HT_LIGHTFUNC, func->type);
                 }
                 break;
             }

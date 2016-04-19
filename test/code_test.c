@@ -45,6 +45,16 @@ static Value _mock_print(VMState *vm, Value value)
 static Value _random(VMState *vm, Value value)
 { return value_from_int(random()); }
 
+static Value _assert(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    if (!value_to_int(hash_find(args, 1))) {
+        printf("C Assert Failed!\n");
+        __builtin_trap();
+    }
+    return value_undefined();
+}
+
 void
 code_light_function_test(CuTest *tc)
 {
@@ -121,25 +131,52 @@ code_sort_test(CuTest *tc)
         "  array[i] = global.random() % 10 + 10;\n"
         "  i = i + 1;\n"
         "}\n"
-        "i = 0;\n"
-        "while (i < 10) {\n"
-        "  global.print(array[i]);\n"
-        "  i = i + 1;\n"
-        "}\n"
         "sort(array, 10);\n"
         "i = 0;\n"
-        "while (i < 10) {\n"
-        "  global.print(array[i]);\n"
+        "while (i < 9) {\n"
+        "  global.assert(array[i] <= array[i+1]);\n"
         "  i = i + 1;\n"
         "}\n"
     ;
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    output_vm_state(stdout, vm);
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _mock_print), "print");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _random), "random");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _assert), "assert");
+
+    cvm_state_run(vm);
+    (void)tc;
+}
+
+void
+code_closure_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let create_closure = function (num) {\n"
+        "  let ret = [];\n"
+        "  let i = 0;\n"
+        "  while (i < num) {\n"
+        "    ret[i] = function () {\n"
+        "      return i;\n"
+        "    };\n"
+        "    i = i + 1;\n"
+        "  }\n"
+        "  return ret;\n"
+        "};\n"
+        "let closures = create_closure(10);\n"
+        "let i = 0;\n"
+        "while (i < 10) {\n"
+        "  global.assert(closures[i]() == i);\n"
+        "  i = i + 1;\n"
+        "}\n"
+    ;
+
+    VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
     cvm_register_in_global(vm, cvm_create_light_function(vm, _mock_print), "print");
     cvm_register_in_global(vm, cvm_create_light_function(vm, _random), "random");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _assert), "assert");
 
     cvm_state_run(vm);
     (void)tc;
@@ -154,6 +191,7 @@ code_test_suite(void)
     SUITE_ADD_TEST(suite, code_left_hand_function_call_test);
     SUITE_ADD_TEST(suite, code_pass_function_around_test);
     SUITE_ADD_TEST(suite, code_sort_test);
+    SUITE_ADD_TEST(suite, code_closure_test);
 
     return suite;
 }

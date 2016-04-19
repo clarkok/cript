@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 2.8)
 project(cript)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32 -g")
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 endif()
 
 option(PROFILE "enable profiling" OFF)
 if (PROFILE)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -pg")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -pg")
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)

@@ -85,6 +85,10 @@ void
 young_gen_gc_mark(YoungGen *young_gen, Hash **target)
 {
     Hash *hash = *target;
+    if (hash->type == HT_GC_LEFT) {
+        *target = (Hash*)hash->size;
+        return;
+    }
 
     if ((YoungGenBlock*)((uintptr_t)hash & -YOUNG_GEN_BLOCK_SIZE) != young_gen->current) {
         return;
@@ -129,6 +133,9 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
                     default:
                         assert(0);
                 }
+            }
+            else {
+                node->value = value_from_ptr((Hash*)child_hash->size);
             }
         }
     }
