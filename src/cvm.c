@@ -315,7 +315,7 @@ cvm_state_run(VMState *vm)
                 if (func->type == HT_LIGHTFUNC) {
                     cvm_set_register(
                         vm, inst.i_rd,
-                        func->hi_func(cvm_get_register(vm, inst.i_rt))
+                        func->hi_func(vm, cvm_get_register(vm, inst.i_rt))
                     );
                 }
                 else {

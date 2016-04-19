@@ -39,7 +39,8 @@ hash_type_to_str(int type)
     return LITERAL[type];
 }
 
-typedef Value (*light_function)(Value);
+typedef struct VMState VMState;
+typedef Value (*light_function)(VMState*, Value);
 
 typedef struct Hash
 {
