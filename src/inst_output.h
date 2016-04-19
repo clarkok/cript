@@ -11,6 +11,7 @@
 #include "inst_list.h"
 #include "value.h"
 #include "string_pool.h"
+#include "cvm.h"
 
 extern const char INST_NAME[];
 
@@ -72,6 +73,21 @@ output_inst_list(FILE *fout, InstList *list)
          *limit = list->insts + list->count;
     for (; ptr != limit; ++ptr) {
         output_inst(fout, *ptr);
+    }
+}
+
+static inline void
+output_vm_state(FILE *fout, VMState *vm)
+{
+    list_for_each(&vm->functions, func_node) {
+        VMFunction *function = list_get(func_node, VMFunction, _linked);
+        printf("Function: 0x%x, captured: %d:\n", (size_t)function, hash_size(function->capture_list));
+        output_inst_list(stdout, function->inst_list);
+        printf("capture list:\n");
+        hash_for_each(function->capture_list, capture) {
+                printf("  $%d -> $%d\n", capture->key, value_to_int(capture->value));
+            }
+        printf("\n");
     }
 }
 

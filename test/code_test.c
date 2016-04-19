@@ -4,8 +4,8 @@
 
 #include "CuTest.h"
 #include "parse.h"
-#include "parse_internal.h"
 #include "cvm.h"
+#include "math.h"
 
 #include "inst_output.h"
 
@@ -41,6 +41,9 @@ static Value _mock_print(VMState *vm, Value value)
     printf("\n");
     return value_undefined();
 }
+
+static Value _random(VMState *vm, Value value)
+{ return value_from_int(random()); }
 
 void
 code_light_function_test(CuTest *tc)
@@ -91,6 +94,57 @@ code_pass_function_around_test(CuTest *tc)
     (void)tc;
 }
 
+void
+code_sort_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let sort = function (array, len) {\n"
+        "  let i = 0,\n"
+        "      j = 0;\n"
+        "  while (i < len) {\n"
+        "    j = i + 1;\n"
+        "    while (j < len) {\n"
+        "      if (array[i] > array[j]) {\n"
+        "        let t = array[i];\n"
+        "        array[i] = array[j];\n"
+        "        array[j] = t;\n"
+        "      }\n"
+        "      j = j + 1;\n"
+        "    }\n"
+        "    i = i + 1;\n"
+        "  }\n"
+        "};\n"
+        "\n"
+        "let i = 0;\n"
+        "let array = [];\n"
+        "while (i < 10) {\n"
+        "  array[i] = global.random() % 10 + 10;\n"
+        "  i = i + 1;\n"
+        "}\n"
+        "i = 0;\n"
+        "while (i < 10) {\n"
+        "  global.print(array[i]);\n"
+        "  i = i + 1;\n"
+        "}\n"
+        "sort(array, 10);\n"
+        "i = 0;\n"
+        "while (i < 10) {\n"
+        "  global.print(array[i]);\n"
+        "  i = i + 1;\n"
+        "}\n"
+    ;
+
+    VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
+
+    output_vm_state(stdout, vm);
+
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _mock_print), "print");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _random), "random");
+
+    cvm_state_run(vm);
+    (void)tc;
+}
+
 CuSuite *
 code_test_suite(void)
 {
@@ -99,6 +153,7 @@ code_test_suite(void)
     SUITE_ADD_TEST(suite, code_light_function_test);
     SUITE_ADD_TEST(suite, code_left_hand_function_call_test);
     SUITE_ADD_TEST(suite, code_pass_function_around_test);
+    SUITE_ADD_TEST(suite, code_sort_test);
 
     return suite;
 }

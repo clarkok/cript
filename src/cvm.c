@@ -405,11 +405,12 @@ cvm_state_run(VMState *vm)
                 else if (func->type == HT_CLOSURE) {
                     Hash *args = _cvm_get_hash_in_register(vm, inst.i_rt);
 
-                    for (size_t i = 0; i < func->hi_closure->arguments_nr; ++i) {
+                    cvm_state_push_frame(vm, func->hi_closure);
+
+                    for (size_t i = 0; i <= func->hi_closure->arguments_nr; ++i) {
                         cvm_set_register(vm, i + 1, hash_find(args, i));
                     }
 
-                    cvm_state_push_frame(vm, func->hi_closure);
                     hash_for_each(func, captured) {
                         cvm_set_register(vm, captured->key, captured->value);
                     }
