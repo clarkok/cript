@@ -85,8 +85,8 @@ _cvm_set_hash(VMState *vm, size_t reg, uintptr_t key, Value val)
     }
 }
 
-void
-cvm_state_push_frames(VMState *vm, VMFunction *function)
+static inline void
+cvm_state_push_frame(VMState *vm, VMFunction *function)
 {
     VMFrame *frame = malloc(sizeof(VMFrame) + function->register_nr * sizeof(Value));
     frame->function = function;
@@ -99,6 +99,10 @@ cvm_state_push_frames(VMState *vm, VMFunction *function)
 
     list_prepend(&vm->frames, &frame->_linked);
 }
+
+static inline void
+cvm_state_pop_frame(VMState *vm)
+{ free(list_get(list_unlink(list_head(&vm->frames)), VMFrame, _linked)); }
 
 VMState *
 cvm_state_new_from_parse_state(ParseState *state)
@@ -122,7 +126,7 @@ cvm_state_new_from_parse_state(ParseState *state)
 
     list_prepend(&vm->functions, &main_function->_linked);
 
-    cvm_state_push_frames(vm, main_function);
+    cvm_state_push_frame(vm, main_function);
 
     return vm;
 }
@@ -156,7 +160,7 @@ cvm_state_new(InstList *main_inst_list, StringPool *string_pool)
 
     list_prepend(&vm->functions, &main_function->_linked);
 
-    cvm_state_push_frames(vm, main_function);
+    cvm_state_push_frame(vm, main_function);
 
     return vm;
 }
@@ -193,7 +197,7 @@ cvm_young_gc(VMState *vm)
 
     list_for_each(&vm->frames, frame_node) {
         VMFrame *frame = list_get(frame_node, VMFrame, _linked);
-        for (size_t i = 0; i < frame->function->register_nr; ++i) {
+        for (size_t i = 0; i <= frame->function->register_nr; ++i) {
             if (value_is_ptr(frame->regs[i])) {
                 Hash *hash = value_to_ptr(frame->regs[i]);
                 while (hash->type == HT_REDIRECT) {
@@ -223,7 +227,7 @@ cvm_register_in_global(VMState *vm, Value value, const char *name)
     _cvm_set_hash(vm, 1, (uintptr_t)key, value);
 }
 
-void
+Value
 cvm_state_run(VMState *vm)
 {
     for (;;) {
@@ -231,7 +235,7 @@ cvm_state_run(VMState *vm)
         Inst inst = frame->function->inst_list->insts[frame->pc++];
         switch (inst.type) {
             case I_HALT:
-                return;
+                return value_undefined();
             case I_LI:
                 cvm_set_register(
                     vm, inst.i_rd,
@@ -398,11 +402,57 @@ cvm_state_run(VMState *vm)
                         func->hi_func(vm, cvm_get_register(vm, inst.i_rt))
                     );
                 }
+                else if (func->type == HT_CLOSURE) {
+                    Hash *args = _cvm_get_hash_in_register(vm, inst.i_rt);
+
+                    for (size_t i = 0; i < func->hi_closure->arguments_nr; ++i) {
+                        cvm_set_register(vm, i + 1, hash_find(args, i));
+                    }
+
+                    cvm_state_push_frame(vm, func->hi_closure);
+                    hash_for_each(func, captured) {
+                        cvm_set_register(vm, captured->key, captured->value);
+                    }
+                }
                 else {
                     type_error(vm, HT_LIGHTFUNC, func->type);
                 }
                 break;
             }
+            case I_RET:
+            {
+                Value ret_val = cvm_get_register(vm, inst.i_rd);
+                cvm_state_pop_frame(vm);
+                if (!list_size(&vm->frames)) { return ret_val; }
+                Inst original_inst = vm_frame_top(vm)->function->inst_list->insts[vm_frame_top(vm)->pc - 1];
+                cvm_set_register(vm, original_inst.i_rd, ret_val);
+                break;
+            }
+            case I_NEW_CLS:
+            {
+                VMFunction *func = (VMFunction*)inst.i_imm;
+                Hash *closure = _cvm_allocate_new_hash(vm, 2 * hash_size(func->capture_list), HT_CLOSURE);
+                closure->hi_closure = func;
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    value_from_ptr(closure)
+                );
+                // should not trigger gc
+                hash_for_each(func->capture_list, capture) {
+                    hash_set(
+                        closure,
+                        (uintptr_t)value_to_int(capture->value),
+                        cvm_get_register(vm, capture->key)
+                    );
+                }
+                break;
+            }
+            case I_UNDEFINED:
+                cvm_set_register(vm, inst.i_rd, value_undefined());
+                break;
+            case I_NULL:
+                cvm_set_register(vm, inst.i_rd, value_null());
+                break;
             default:
                 error_f("Unknown VM instrument (offset %d)", frame->pc - 1);
                 break;

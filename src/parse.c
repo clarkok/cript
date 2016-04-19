@@ -363,15 +363,7 @@ _lex_next(ParseState *state)
 
 static inline size_t
 _parse_allocate_register(ParseState *state)
-{
-    size_t ret = scope_stack_top(state)->register_counter++;
-
-    if (function_stack_top(state)->register_nr < scope_stack_top(state)->register_counter) {
-        function_stack_top(state)->register_nr = scope_stack_top(state)->register_counter;
-    }
-
-    return ret;
-}
+{ return _parse_allocate_reg_for_func(function_stack_top(state)); }
 
 static inline void
 _parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
@@ -382,18 +374,17 @@ _parse_define_into_scope(ParseScope *scope, CString *string, size_t reg)
 { hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg)); }
 
 static inline FunctionScope *
-_parse_function_scope_new(size_t arguments_nr)
+_parse_function_scope_new()
 {
     FunctionScope *ret = malloc(sizeof(FunctionScope));
     list_node_init(&ret->_linked);
     list_init(&ret->scopes);
-    ret->arguments_nr = arguments_nr;
-    ret->register_nr = 1 + arguments_nr;
+    ret->arguments_nr = 0;
+    ret->register_nr = 1;
     ret->capture_list = hash_new(HASH_MIN_CAPACITY);
     ret->inst_list = inst_list_new(16);
 
     ParseScope *scope = malloc(sizeof(ParseScope));
-    scope->register_counter = 1 + arguments_nr;
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
     scope->upper_table = hash_new(HASH_MIN_CAPACITY);
     list_prepend(&ret->scopes, &scope->_linked);
@@ -426,7 +417,7 @@ parse_state_new_from_string(const char *content)
     list_init(&state->functions);
 
     list_init(&state->function_stack);
-    FunctionScope *function = _parse_function_scope_new(0);
+    FunctionScope *function = _parse_function_scope_new();
     list_prepend(&state->function_stack, &function->_linked);
 
     size_t global_reg = _parse_allocate_register(state);
@@ -465,7 +456,6 @@ _parse_push_scope(ParseState *state)
     ParseScope *scope = malloc(sizeof(ParseScope));
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
     scope->upper_table = hash_new(HASH_MIN_CAPACITY);
-    scope->register_counter = scope_stack_top(state)->register_counter;
     list_prepend(&function_stack_top(state)->scopes, &scope->_linked);
 }
 
@@ -492,9 +482,34 @@ _parse_join_scope(ParseState *state)
 }
 
 static inline void
-_parse_push_function(ParseState *state, size_t arguments_nr)
+_parse_push_function(ParseState *state)
 {
-    FunctionScope *function = _parse_function_scope_new(arguments_nr);
+    FunctionScope *function_scope = _parse_function_scope_new();
+    list_prepend(&state->function_stack, &function_scope->_linked);
+}
+
+static inline VMFunction *
+_parse_pop_function(ParseState *state)
+{
+    VMFunction *function = malloc(sizeof(VMFunction));
+    FunctionScope *func_scope = list_get(list_unlink(list_head(&state->function_stack)), FunctionScope, _linked);
+
+    list_node_init(&function->_linked);
+    function->arguments_nr = func_scope->arguments_nr;
+    function->register_nr = func_scope->register_nr;
+    function->capture_list = func_scope->capture_list;
+    function->inst_list = func_scope->inst_list;
+
+    assert(list_size(&func_scope->scopes) == 1);
+    ParseScope *scope = list_get(list_head(&func_scope->scopes), ParseScope, _linked);
+    hash_destroy(scope->symbol_table);
+    hash_destroy(scope->upper_table);
+    free(scope);
+    free(func_scope);
+
+    list_append(&state->functions, &function->_linked);
+
+    return function;
 }
 
 static inline void
@@ -510,6 +525,8 @@ _parse_inject_reserved(ParseState *state, CString *reserved[])
     inject_reserved(R_IF, "if");
     inject_reserved(R_ELSE, "else");
     inject_reserved(R_WHILE, "while");
+    inject_reserved(R_FUNCTION, "function");
+    inject_reserved(R_RETURN, "return");
 
 #undef inject_reserved
 }
@@ -701,6 +718,117 @@ _parse_array_literal(ParseState *state)
     return ret;
 }
 
+void _parse_statement(ParseState *state);
+
+size_t
+_parse_function_literal(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == TOK_ID);
+    assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_FUNCTION);
+
+    _parse_push_function(state);
+
+    tok = _lex_next(state);
+    if (tok != '(') {
+        parse_expect_error(state, "'('", tok);
+        return 0;
+    }
+
+    size_t this_reg = _parse_allocate_register(state);
+    assert(this_reg == 1);
+
+    _parse_define_into_scope(
+        scope_stack_top(state),
+        string_pool_insert_str(&state->string_pool, "this"),
+        this_reg
+    );
+
+    tok = _lex_peak(state);
+    while (tok != TOK_EOF && tok != ')') {
+        if (tok != TOK_ID) {
+            parse_expect_error(state, "identifier", tok);
+            break;
+        }
+        _lex_next(state);
+        CString *literal = (CString*)state->peaking_value;
+        _parse_define_into_scope(scope_stack_top(state), literal, _parse_allocate_register(state));
+        function_stack_top(state)->arguments_nr++;
+
+        tok = _lex_peak(state);
+        if (tok == ')') {
+            break;
+        }
+        else if (tok == ',') {
+            _lex_next(state);
+            tok = _lex_peak(state);
+        }
+        else {
+            parse_expect_error(state, "','", tok);
+            break;
+        }
+    }
+
+    tok = _lex_next(state);
+    if (tok == TOK_EOF) {
+        parse_error(state, "%s", "unexpected EOF");
+        return 0;
+    }
+    assert(tok == ')');
+
+    tok = _lex_next(state);
+    if (tok != '{') {
+        parse_expect_error(state, "'{'", tok);
+        return 0;
+    }
+
+    tok = _lex_peak(state);
+    while (tok != TOK_EOF && tok != '}') {
+        _parse_statement(state);
+        tok = _lex_peak(state);
+    }
+
+    if (tok == TOK_EOF) {
+        parse_error(state, "%s", "unexpected EOF");
+        return 0;
+    }
+    assert(tok == '}');
+    _lex_next(state);
+
+    size_t ret_reg = _parse_allocate_register(state);
+    _parse_push_inst(
+        state,
+        cvm_inst_new_i_type(
+            I_UNDEFINED,
+            ret_reg,
+            0
+        )
+    );
+
+    _parse_push_inst(
+        state,
+        cvm_inst_new_i_type(
+            I_RET,
+            ret_reg,
+            0
+        )
+    );
+
+    VMFunction *func = _parse_pop_function(state);
+
+    size_t ret = _parse_allocate_register(state);
+    _parse_push_inst(
+        state,
+        cvm_inst_new_i_type(
+            I_NEW_CLS,
+            ret,
+            (size_t)func
+        )
+    );
+
+    return ret;
+}
+
 size_t
 _parse_unary_expr(ParseState *state)
 {
@@ -750,18 +878,23 @@ _parse_unary_expr(ParseState *state)
                 );
             }
             intptr_t reg = _parse_find_in_symbol_table(state, literal);
-            if (reg < 0) {
+            if (reg == -R_FUNCTION) {
+                ret = _parse_function_literal(state);
+            }
+            else if (reg < 0) {
                 parse_expect_error(state, "unary expr", tok);
                 break;
             }
-            else if (reg == 0) {
-                parse_warn(state, "variable '%.*s' used before initializing it",
-                           literal->length,
-                           literal->content
-                );
+            else {
+                if (reg == 0) {
+                    parse_warn(state, "variable '%.*s' used before initializing it",
+                               literal->length,
+                               literal->content
+                    );
+                }
+                _lex_next(state);
+                ret = (size_t)reg;
             }
-            _lex_next(state);
-            ret = (size_t)reg;
             break;
         }
         case '{':
@@ -1348,10 +1481,10 @@ _parse_assignment_expr(ParseState *state)
         _lex_next(state);
     }
 
-    size_t reg_count = scope_stack_top(state)->register_counter;
+    size_t reg_count = function_stack_top(state)->register_nr;
     size_t result_reg = _parse_right_hand_expr(state);
 
-    if (scope_stack_top(state)->register_counter == reg_count) {
+    if (function_stack_top(state)->register_nr == reg_count) {
         size_t temp_reg = _parse_allocate_register(state);
         _parse_push_inst(
             state,
@@ -1535,6 +1668,44 @@ _parse_while_stmt(ParseState *state)
 }
 
 void
+_parse_return_stmt(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == TOK_ID);
+    assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_RETURN);
+
+    tok = _lex_peak(state);
+    size_t ret_reg;
+    if (tok != ';') {
+        ret_reg = _parse_right_hand_expr(state);
+    }
+    else {
+        ret_reg = _parse_allocate_register(state);
+        _parse_push_inst(
+            state,
+            cvm_inst_new_d_type(
+                I_UNDEFINED,
+                ret_reg,
+                0, 0
+            )
+        );
+    }
+    _parse_push_inst(
+        state,
+        cvm_inst_new_d_type(
+            I_RET,
+            ret_reg,
+            0, 0
+        )
+    );
+
+    tok = _lex_next(state);
+    if (tok != ';') {
+        parse_expect_error(state, "';'", tok);
+    }
+}
+
+void
 _parse_statement(ParseState *state)
 {
     switch (_lex_peak(state)) {
@@ -1556,6 +1727,9 @@ _parse_statement(ParseState *state)
                         break;
                     case -R_WHILE:
                         _parse_while_stmt(state);
+                        break;
+                    case -R_RETURN:
+                        _parse_return_stmt(state);
                         break;
                     default:
                         _parse_expr_stmt(state);
@@ -1588,8 +1762,6 @@ parse(ParseState *state)
     while (_lex_peak(state) != TOK_EOF) {
         _parse_statement(state);
     }
-
-    assert((function_stack_top(state)->register_nr) >= (scope_stack_top(state)->register_counter));
 }
 
 VMFunction *

@@ -52,7 +52,12 @@ output_inst(FILE *fout, Inst inst)
         case I_NEW_OBJ:
         case I_NEW_ARR:
         case I_RET:
+        case I_UNDEFINED:
+        case I_NULL:
             fprintf(fout, "$%d\n", inst.i_rd);
+            break;
+        case I_NEW_CLS:
+            fprintf(fout, "$%d, 0x%x\n", inst.i_rd, inst.i_imm);
             break;
         default:
             fprintf(fout, "\n");

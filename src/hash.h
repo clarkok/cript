@@ -21,6 +21,7 @@ enum HashType
     HT_ARRAY,
     HT_REDIRECT,
     HT_LIGHTFUNC,
+    HT_CLOSURE,
 
     HT_GC_LEFT,
 };
@@ -40,6 +41,7 @@ hash_type_to_str(int type)
 }
 
 typedef struct VMState VMState;
+typedef struct VMFunction VMFunction;
 typedef Value (*light_function)(VMState*, Value);
 
 typedef struct Hash
@@ -47,6 +49,7 @@ typedef struct Hash
     int type;
     union {
         light_function _func;
+        VMFunction *_closure;
     } _info;
     size_t capacity;
     size_t size;
@@ -54,6 +57,7 @@ typedef struct Hash
 } Hash;
 
 #define hi_func     _info._func
+#define hi_closure  _info._closure
 
 #define HASH_MIN_CAPACITY           (16)
 

@@ -34,6 +34,8 @@ enum ReservedWord
     R_IF,
     R_ELSE,
     R_WHILE,
+    R_FUNCTION,
+    R_RETURN,
 
     RESERVED_WORD_NR
 };
@@ -42,7 +44,6 @@ typedef struct ParseScope
 {
     LinkedNode _linked;
 
-    size_t register_counter;
     Hash *symbol_table;
     Hash *upper_table;
 } ParseScope;
@@ -64,6 +65,10 @@ int _lex_next(ParseState *state);
 #define function_stack_top(state)   (list_get(list_head(&state->function_stack), FunctionScope, _linked))
 #define scope_stack_top(state)      (list_get(list_head(&function_stack_top(state)->scopes), ParseScope, _linked))
 
+static inline size_t
+_parse_allocate_reg_for_func(FunctionScope *func_scope)
+{ return func_scope->register_nr++; }
+
 static inline Value
 _parse_capture_variable(ParseState *state, ParseScope *scope, CString *string)
 {
@@ -81,8 +86,8 @@ _parse_capture_variable(ParseState *state, ParseScope *scope, CString *string)
 
     function = list_get(list_prev(&function->_linked), FunctionScope, _linked);
     while (function) {
-        size_t new_reg = hash_size(function->capture_list);
-        hash_set_and_update(function->capture_list, new_reg, value_from_int(reg));
+        size_t new_reg = _parse_allocate_reg_for_func(function);
+        hash_set_and_update(function->capture_list, reg, value_from_int(new_reg));
 
         ParseScope *base_scope = list_get(list_tail(&function->scopes), ParseScope, _linked);
         hash_set_and_update(

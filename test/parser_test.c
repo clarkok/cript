@@ -10,9 +10,6 @@
 
 #include "inst_output.h"
 
-#define output_inst_list_of_state(state)            \
-    output_inst_list(stdout, list_get(list_head(&state->function_stack), FunctionScope, _linked)->inst_list);
-
 void
 lex_test(CuTest *tc)
 {
@@ -813,6 +810,44 @@ parse_nested_block_buggy_test(CuTest *tc)
     parse_state_destroy(state);
 }
 
+void
+parse_function_parse_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let test_func1 = function (arg1, arg2) {};\n"
+        "let test_func2 = function () {};\n"
+        "let test_func3 = function () {\n"
+        "  let local = 1;\n"
+        "  test_func2();\n"
+        "  return local;\n"
+        "};\n"
+        "return test_func3();\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    list_for_each(&vm->functions, func_node) {
+        VMFunction *function = list_get(func_node, VMFunction, _linked);
+        printf("Function: 0x%x, captured: %d:\n", (size_t)function, hash_size(function->capture_list));
+        output_inst_list(stdout, function->inst_list);
+        printf("capture list:\n");
+        hash_for_each(function->capture_list, capture) {
+            printf("  $%d -> $%d\n", capture->key, value_to_int(capture->value));
+        }
+        printf("\n");
+    }
+
+    Value ret_val = cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1, value_to_int(ret_val));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
 CuSuite *
 parse_test_suite(void)
 {
@@ -841,6 +876,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_array_test);
     SUITE_ADD_TEST(suite, parse_array_set_test);
     SUITE_ADD_TEST(suite, parse_nested_block_buggy_test);
+    SUITE_ADD_TEST(suite, parse_function_parse_test);
 
     return suite;
 }

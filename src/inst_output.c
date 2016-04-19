@@ -34,6 +34,10 @@ const char INST_NAME[] =
 
     "call    "
     "ret     "
+    "newcls  "
+
+    "undef   "
+    "null    "
 ;
 
-_Static_assert(8 * INST_NR + 1 == sizeof(INST_NAME), "Keep INST_NAME synced with insts");
+_Static_assert((8 * INST_NR + 1 == sizeof(INST_NAME)), "Keep INST_NAME synced with insts");

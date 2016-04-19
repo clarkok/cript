@@ -123,6 +123,7 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
                     case HT_OBJECT:
                     case HT_ARRAY:
                     case HT_LIGHTFUNC:
+                    case HT_CLOSURE:
                         young_gen_gc_mark(young_gen, (Hash**)(&node->value));
                         break;
                     default:

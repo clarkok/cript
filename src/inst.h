@@ -34,6 +34,10 @@ enum InstType
 
     I_CALL,     // $rd is return val, $rs is the function, $rt is an array of [this, ...arguments]
     I_RET,
+    I_NEW_CLS,
+
+    I_UNDEFINED,
+    I_NULL,
 
     INST_NR
 };
