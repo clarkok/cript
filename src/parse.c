@@ -88,7 +88,10 @@ _lex_parse_identifier(ParseState *state)
     char buffer[MAX_SHORT_STRING_LENGTH + 1],
          *buf_ptr = buffer;
 
-    while (state->current != state->limit && isalnum(*(state->current))) {
+    while (
+        state->current != state->limit &&
+        (isalnum(*(state->current)) || *(state->current) == '_' || *(state->current) == '$')
+    ) {
         if (buf_ptr - buffer < MAX_SHORT_STRING_LENGTH) {
             *buf_ptr++ = *(state->current);
         }
@@ -716,9 +719,10 @@ size_t
 _parse_postfix_expr(ParseState *state)
 {
     size_t ret = _parse_unary_expr(state);
+    size_t this_reg = 1;    // always start from global
 
     int tok = _lex_peak(state);
-    while (tok == '.' || tok == '[') {
+    while (tok == '.' || tok == '[' || tok == '(') {
         _lex_next(state);
 
         if (tok == '.') {
@@ -749,9 +753,10 @@ _parse_postfix_expr(ParseState *state)
                 )
             );
 
+            this_reg = ret;
             ret = temp_reg;
         }
-        else {
+        else if (tok == '[') {
             size_t key_reg = _parse_right_hand_expr(state);
             size_t temp_reg = _parse_allocate_register(state);
             _parse_push_inst(
@@ -769,6 +774,102 @@ _parse_postfix_expr(ParseState *state)
                 return 0;
             }
 
+            this_reg = ret;
+            ret = temp_reg;
+        }
+        else {
+            size_t func_reg = ret;
+            size_t arg_reg = _parse_allocate_register(state);
+            size_t key_reg = _parse_allocate_register(state);
+            size_t one_reg = _parse_allocate_register(state);
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_NEW_ARR,
+                    arg_reg,
+                    0, 0
+                )
+            );
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_i_type(
+                    I_LI,
+                    one_reg,
+                    1
+                )
+            );
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_i_type(
+                    I_LI,
+                    key_reg,
+                    0
+                )
+            );
+
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_SET_OBJ,
+                    arg_reg,
+                    this_reg,
+                    key_reg
+                )
+            );
+
+            tok = _lex_peak(state);
+            while (tok != TOK_EOF && tok != ')') {
+                size_t result_reg = _parse_right_hand_expr(state);
+
+                _parse_push_inst(
+                    state,
+                    cvm_inst_new_d_type(
+                        I_ADD,
+                        key_reg,
+                        key_reg,
+                        one_reg
+                    )
+                );
+
+                _parse_push_inst(
+                    state,
+                    cvm_inst_new_d_type(
+                        I_SET_OBJ,
+                        arg_reg,
+                        result_reg,
+                        key_reg
+                    )
+                );
+
+                tok = _lex_peak(state);
+                if (tok == ')') {
+                    break;
+                }
+                else if (tok == ',') {
+                    _lex_next(state);
+                }
+                else {
+                    parse_expect_error(state, "','", tok);
+                }
+            }
+
+            _lex_next(state);
+
+            size_t temp_reg = _parse_allocate_register(state);
+            _parse_push_inst(
+                state,
+                cvm_inst_new_d_type(
+                    I_CALL,
+                    temp_reg,
+                    func_reg,
+                    arg_reg
+                )
+            );
+
+            this_reg = ret;
             ret = temp_reg;
         }
 

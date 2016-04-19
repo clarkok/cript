@@ -736,7 +736,6 @@ parse_try_gc_test(CuTest *tc)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
 
@@ -802,7 +801,6 @@ parse_array_set_test(CuTest *tc)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
     intptr_t reg_e = get_reg_from_parse_state(state, "e");

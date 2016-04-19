@@ -16,6 +16,7 @@ _vm_from_code_snippet(const char *code)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
+    output_inst_list(stdout, state->inst_list);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
 
@@ -24,8 +25,17 @@ _vm_from_code_snippet(const char *code)
     return vm;
 }
 
-static Value mock_print(Value value)
+static Value _mock_print(Value value)
 {
+    Hash *args = value_to_ptr(value);
+
+    for (uintptr_t i = 1; i < hash_size(args); ++i) {
+        Value val = hash_find(args, i);
+
+        printf("%d ", value_to_int(val));
+    }
+
+    printf("\n");
     return value_undefined();
 }
 
@@ -33,13 +43,15 @@ void
 code_light_function_test(CuTest *tc)
 {
     static const char TEST_CONTENT[] =
-        "let print;";
+        "let print_result = global.print(1, 2, 3, 4, 5);";
     ;
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    Value print = cvm_create_light_function(vm, mock_print);
+    Value print = cvm_create_light_function(vm, _mock_print);
     cvm_register_in_global(vm, print, "print");
+
+    cvm_state_run(vm);
 
     (void)tc;
 }
