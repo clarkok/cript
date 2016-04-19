@@ -11,6 +11,8 @@
 #include "string_pool.h"
 #include "hash.h"
 
+typedef struct VMFunction VMFunction;
+
 typedef struct ParseState
 {
     const char *filename;
@@ -21,7 +23,6 @@ typedef struct ParseState
     size_t content_length;
 
     StringPool *string_pool;
-    InstList *inst_list;
 
     const char *current;
     const char *limit;
@@ -29,11 +30,15 @@ typedef struct ParseState
     int peaking_token;
     intptr_t peaking_value;
 
-    LinkedList scope_stack;
+    LinkedList functions;
+
+    LinkedList function_stack;
 } ParseState;
 
 ParseState *parse_state_new_from_string(const char *content);
 void parse_state_destroy(ParseState *state);
+
+VMFunction *parse_get_main_function(ParseState *state);
 
 void parse(ParseState *state);
 

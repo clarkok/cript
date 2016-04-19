@@ -3,11 +3,15 @@
 //
 
 #include "CuTest.h"
+
 #include "parse.h"
 #include "parse_internal.h"
 #include "cvm.h"
 
 #include "inst_output.h"
+
+#define output_inst_list_of_state(state)            \
+    output_inst_list(stdout, list_get(list_head(&state->function_stack), FunctionScope, _linked)->inst_list);
 
 void
 lex_test(CuTest *tc)
@@ -174,7 +178,7 @@ lex_test(CuTest *tc)
     _parse_find_in_symbol_table(state, (uintptr_t)string_pool_find_str(state->string_pool, name))
 
 #define get_reg_value_from_vm(vm, reg)  \
-    vm->regs[reg]
+    list_get(list_head(&vm->frames), VMFrame, _linked)->regs[reg]
 
 void
 parse_test(CuTest *tc)
@@ -189,8 +193,6 @@ parse_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -215,8 +217,6 @@ parse_complex_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
@@ -244,8 +244,6 @@ parse_block_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -282,8 +280,6 @@ parse_nested_block_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
 
@@ -311,8 +307,6 @@ parse_if_true_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -337,8 +331,6 @@ parse_if_false_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
@@ -368,8 +360,6 @@ parse_if_else_true_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -397,8 +387,6 @@ parse_if_else_false_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
@@ -429,8 +417,6 @@ parse_nested_if_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -458,8 +444,6 @@ parse_nested_if_test_buggy1(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -484,8 +468,6 @@ parse_while_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
@@ -512,8 +494,6 @@ parse_compare_expr_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -537,8 +517,6 @@ parse_logic_and_expr_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -567,8 +545,6 @@ parse_logic_or_expr_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -604,8 +580,6 @@ parse_fibonacci_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
@@ -628,8 +602,6 @@ parse_string_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_a = get_reg_from_parse_state(state, "a");
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
@@ -669,8 +641,6 @@ parse_object_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
     intptr_t reg_e = get_reg_from_parse_state(state, "e");
 
@@ -705,8 +675,6 @@ parse_object_set_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
     intptr_t reg_e = get_reg_from_parse_state(state, "e");
 
@@ -735,8 +703,6 @@ parse_try_gc_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     VMState *vm = cvm_state_new_from_parse_state(state);
 
     cvm_state_run(vm);
@@ -763,8 +729,6 @@ parse_array_test(CuTest *tc)
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
-
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
 
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
     intptr_t reg_e = get_reg_from_parse_state(state, "e");
@@ -800,8 +764,6 @@ parse_array_set_test(CuTest *tc)
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     intptr_t reg_d = get_reg_from_parse_state(state, "d");
     intptr_t reg_e = get_reg_from_parse_state(state, "e");
 
@@ -811,6 +773,41 @@ parse_array_set_test(CuTest *tc)
 
     CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_d)));
     CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
+void
+parse_nested_block_buggy_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 1;\n"
+        "let b = 2;\n"
+        "{\n"
+        "  let c = 3;\n"
+        "  {\n"
+        "    b = c;\n"
+        "    c = 4;\n"
+        "  }\n"
+        "  a = c;"
+        "}\n"
+        "let d = b + a;\n"
+        "let e = a;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    intptr_t reg_d = get_reg_from_parse_state(state, "d");
+    intptr_t reg_e = get_reg_from_parse_state(state, "e");
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 7, value_to_int(get_reg_value_from_vm(vm, reg_d)));
+    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_e)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -843,6 +840,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_try_gc_test);
     SUITE_ADD_TEST(suite, parse_array_test);
     SUITE_ADD_TEST(suite, parse_array_set_test);
+    SUITE_ADD_TEST(suite, parse_nested_block_buggy_test);
 
     return suite;
 }

@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <ctype.h>
 
+#include "cvm.h"
+
 #include "error.h"
 #include "parse.h"
 #include "parse_internal.h"
@@ -66,7 +68,16 @@
         }
 
 #define _parse_push_inst(state, inst)                                               \
-    inst_list_push(state->inst_list, inst)
+    do {                                                                            \
+        FunctionScope *function = function_stack_top(state);                        \
+        inst_list_push(function->inst_list, inst);                                  \
+    } while (0)
+
+#define _parse_current_inst_list(state)                                             \
+    function_stack_top(state)->inst_list
+
+#define _parse_inst_list_size(state)                                                \
+    _parse_current_inst_list(state)->count
 
 
 void
@@ -352,7 +363,15 @@ _lex_next(ParseState *state)
 
 static inline size_t
 _parse_allocate_register(ParseState *state)
-{ return scope_stack_top(state)->register_counter++; }
+{
+    size_t ret = scope_stack_top(state)->register_counter++;
+
+    if (function_stack_top(state)->register_nr < scope_stack_top(state)->register_counter) {
+        function_stack_top(state)->register_nr = scope_stack_top(state)->register_counter;
+    }
+
+    return ret;
+}
 
 static inline void
 _parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
@@ -361,6 +380,28 @@ _parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
 static inline void
 _parse_define_into_scope(ParseScope *scope, CString *string, size_t reg)
 { hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg)); }
+
+static inline FunctionScope *
+_parse_function_scope_new(size_t arguments_nr)
+{
+    FunctionScope *ret = malloc(sizeof(FunctionScope));
+    list_node_init(&ret->_linked);
+    list_init(&ret->scopes);
+    ret->arguments_nr = arguments_nr;
+    ret->register_nr = 1 + arguments_nr;
+    ret->capture_list = hash_new(HASH_MIN_CAPACITY);
+    ret->inst_list = inst_list_new(16);
+
+    ParseScope *scope = malloc(sizeof(ParseScope));
+    scope->register_counter = 1 + arguments_nr;
+    scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
+    scope->upper_table = hash_new(HASH_MIN_CAPACITY);
+    list_prepend(&ret->scopes, &scope->_linked);
+
+    hash_set_and_update(ret->capture_list, 0, value_from_int(0));
+
+    return ret;
+}
 
 ParseState *
 parse_state_new_from_string(const char *content)
@@ -375,7 +416,6 @@ parse_state_new_from_string(const char *content)
     state->content_length = strlen(content);
 
     state->string_pool = string_pool_new();
-    state->inst_list = inst_list_new(16);
 
     state->current = state->content;
     state->limit = state->content + state->content_length;
@@ -383,15 +423,19 @@ parse_state_new_from_string(const char *content)
     state->peaking_token = 0;
     state->peaking_value = 0;
 
-    list_init(&state->scope_stack);
+    list_init(&state->functions);
 
-    ParseScope *scope = malloc(sizeof(ParseScope));
-    scope->register_counter = 2;
-    scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
-    scope->upper_table = hash_new(HASH_MIN_CAPACITY);
-    list_prepend(&state->scope_stack, &scope->_linked);
+    list_init(&state->function_stack);
+    FunctionScope *function = _parse_function_scope_new(0);
+    list_prepend(&state->function_stack, &function->_linked);
 
-    _parse_define_into_scope(scope, string_pool_insert_str(&state->string_pool, "global"), 1);
+    size_t global_reg = _parse_allocate_register(state);
+
+    _parse_define_into_scope(
+        list_get(list_head(&function->scopes), ParseScope, _linked),
+        string_pool_insert_str(&state->string_pool, "global"),
+        global_reg
+    );
     return state;
 }
 
@@ -399,11 +443,18 @@ void
 parse_state_destroy(ParseState *state)
 {
     if (state->string_pool)     { string_pool_destroy(state->string_pool); }
-    if (state->inst_list)       { inst_list_destroy(state->inst_list); }
-    while (list_size(&state->scope_stack)) {
-        ParseScope *scope = list_get(list_unlink(list_head(&state->scope_stack)), ParseScope, _linked);
-        hash_destroy(scope->symbol_table);
-        free(scope);
+    while (list_size(&state->function_stack)) {
+        FunctionScope *function = list_get(list_unlink(list_head(&state->function_stack)), FunctionScope, _linked);
+
+        while (list_size(&function->scopes)) {
+            ParseScope *scope = list_get(list_unlink(list_head(&function->scopes)), ParseScope, _linked);
+            hash_destroy(scope->symbol_table);
+            free(scope);
+        }
+
+        hash_destroy(function->capture_list);
+        inst_list_destroy(function->inst_list);
+        free(function);
     }
     free(state);
 }
@@ -415,14 +466,14 @@ _parse_push_scope(ParseState *state)
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
     scope->upper_table = hash_new(HASH_MIN_CAPACITY);
     scope->register_counter = scope_stack_top(state)->register_counter;
-    list_prepend(&state->scope_stack, &scope->_linked);
+    list_prepend(&function_stack_top(state)->scopes, &scope->_linked);
 }
 
 void
 _parse_join_scope(ParseState *state)
 {
     ParseScope *scope = scope_stack_top(state);
-    list_unlink(list_head(&state->scope_stack));
+    list_unlink(list_head(&function_stack_top(state)->scopes));
 
     hash_for_each(scope->upper_table, node) {
         _parse_push_inst(state,
@@ -438,6 +489,12 @@ _parse_join_scope(ParseState *state)
     hash_destroy(scope->upper_table);
     hash_destroy(scope->symbol_table);
     free(scope);
+}
+
+static inline void
+_parse_push_function(ParseState *state, size_t arguments_nr)
+{
+    FunctionScope *function = _parse_function_scope_new(arguments_nr);
 }
 
 static inline void
@@ -686,6 +743,12 @@ _parse_unary_expr(ParseState *state)
         case TOK_ID:
         {
             CString *literal = (CString*)state->peaking_value;
+            if (!_parse_exists_in_symbol_table(state, literal)) {
+                parse_error(state, "Undefined identifier: '%.*s'",
+                            literal->length,
+                            literal->content
+                );
+            }
             intptr_t reg = _parse_find_in_symbol_table(state, literal);
             if (reg < 0) {
                 parse_expect_error(state, "unary expr", tok);
@@ -807,7 +870,7 @@ size_t
 _parse_postfix_expr(ParseState *state)
 {
     size_t ret = _parse_unary_expr(state);
-    size_t this_reg = 1;    // always start from global
+    size_t this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
 
     int tok = _lex_peak(state);
     while (tok == '.' || tok == '[' || tok == '(') {
@@ -880,7 +943,7 @@ _parse_postfix_expr(ParseState *state)
                 )
             );
 
-            this_reg = 1;
+            this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
             ret = temp_reg;
         }
 
@@ -1074,7 +1137,7 @@ _parse_logic_and_expr(ParseState *state)
                     0
                 )
             );
-            current_index = state->inst_list->count;
+            current_index = _parse_inst_list_size(state);
             _parse_push_inst(
                 state,
                 cvm_inst_new_i_type(
@@ -1101,9 +1164,9 @@ _parse_logic_and_expr(ParseState *state)
 
         while (last_index) {
             current_index = last_index;
-            last_index = (size_t)state->inst_list->insts[current_index].i_imm;
-            state->inst_list->insts[current_index].i_imm =
-                state->inst_list->count - current_index - 1;
+            last_index = (size_t)_parse_current_inst_list(state)->insts[current_index].i_imm;
+            _parse_current_inst_list(state)->insts[current_index].i_imm =
+                _parse_current_inst_list(state)->count - current_index - 1;
         }
 
         ret = temp_reg;
@@ -1142,7 +1205,7 @@ _parse_logic_or_expr(ParseState *state)
                     0
                 )
             );
-            current_index = state->inst_list->count;
+            current_index = _parse_inst_list_size(state);
             _parse_push_inst(
                 state,
                 cvm_inst_new_i_type(
@@ -1169,9 +1232,9 @@ _parse_logic_or_expr(ParseState *state)
 
         while (last_index) {
             current_index = last_index;
-            last_index = (size_t)state->inst_list->insts[current_index].i_imm;
-            state->inst_list->insts[current_index].i_imm =
-                state->inst_list->count - current_index - 1;
+            last_index = (size_t)_parse_current_inst_list(state)->insts[current_index].i_imm;
+            _parse_current_inst_list(state)->insts[current_index].i_imm =
+                _parse_current_inst_list(state)->count - current_index - 1;
         }
 
         ret = temp_reg;
@@ -1193,7 +1256,7 @@ void
 _parse_assignment_expr(ParseState *state)
 {
     size_t object_reg = _parse_unary_expr(state);
-    size_t this_reg = 1;    // always start with global
+    size_t this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
     size_t key_reg = 0;
     int tok = _lex_peak(state);
     CString *literal = (CString*)state->peaking_value;
@@ -1214,7 +1277,7 @@ _parse_assignment_expr(ParseState *state)
             );
 
             object_reg = temp_reg;
-            this_reg = 1;
+            this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
             key_reg = 0;
 
             tok = _lex_peak(state);
@@ -1410,7 +1473,7 @@ _parse_if_else_stmt(ParseState *state)
         return;
     }
 
-    size_t bnr_index = state->inst_list->count;
+    size_t bnr_index = _parse_inst_list_size(state);
     _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
 
     _parse_push_scope(state);
@@ -1420,18 +1483,21 @@ _parse_if_else_stmt(ParseState *state)
     tok = _lex_peak(state);
     if (tok == TOK_ID && _parse_find_in_symbol_table(state, state->peaking_value) == -R_ELSE) {
         _lex_next(state);
-        size_t j_index = state->inst_list->count;
+        size_t j_index = _parse_inst_list_size(state);
         _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, 0));
 
-        state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
+        _parse_current_inst_list(state)->insts[bnr_index].i_imm =
+            _parse_inst_list_size(state) - bnr_index - 1;
         _parse_push_scope(state);
         _parse_statement(state);
         _parse_join_scope(state);
 
-        state->inst_list->insts[j_index].i_imm = state->inst_list->count;
+        _parse_current_inst_list(state)->insts[j_index].i_imm =
+            _parse_inst_list_size(state);
     }
     else {
-        state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
+        _parse_current_inst_list(state)->insts[bnr_index].i_imm =
+            _parse_inst_list_size(state) - bnr_index - 1;
     }
 }
 
@@ -1442,7 +1508,7 @@ _parse_while_stmt(ParseState *state)
     assert(tok == TOK_ID);
     assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_WHILE);
 
-    size_t while_begin = state->inst_list->count;
+    size_t while_begin = _parse_inst_list_size(state);
 
     tok = _lex_next(state);
     if (tok != '(') {
@@ -1456,7 +1522,7 @@ _parse_while_stmt(ParseState *state)
         return;
     }
 
-    size_t bnr_index = state->inst_list->count;
+    size_t bnr_index = _parse_inst_list_size(state);
     _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
 
     _parse_push_scope(state);
@@ -1464,7 +1530,8 @@ _parse_while_stmt(ParseState *state)
     _parse_join_scope(state);
     _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, while_begin));
 
-    state->inst_list->insts[bnr_index].i_imm = state->inst_list->count - bnr_index - 1;
+    _parse_current_inst_list(state)->insts[bnr_index].i_imm =
+        _parse_inst_list_size(state) - bnr_index - 1;
 }
 
 void
@@ -1521,4 +1588,21 @@ parse(ParseState *state)
     while (_lex_peak(state) != TOK_EOF) {
         _parse_statement(state);
     }
+
+    assert((function_stack_top(state)->register_nr) >= (scope_stack_top(state)->register_counter));
+}
+
+VMFunction *
+parse_get_main_function(ParseState *state)
+{
+    VMFunction *function = malloc(sizeof(VMFunction));
+    FunctionScope *func_scope = function_stack_top(state);
+
+    list_node_init(&function->_linked);
+    function->arguments_nr = func_scope->arguments_nr;
+    function->register_nr = func_scope->register_nr;
+    function->capture_list = func_scope->capture_list;  func_scope->capture_list = NULL;
+    function->inst_list = func_scope->inst_list;        func_scope->inst_list = NULL;
+
+    return function;
 }

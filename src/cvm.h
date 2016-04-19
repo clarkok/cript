@@ -14,7 +14,28 @@
 #include "inst.h"
 #include "inst_list.h"
 
+#include "list.h"
+
 typedef struct YoungGen YoungGen;
+
+typedef struct VMFunction
+{
+    LinkedNode _linked;
+
+    size_t arguments_nr;
+    size_t register_nr;
+    Hash *capture_list;
+    InstList *inst_list;
+} VMFunction;
+
+typedef struct VMFrame
+{
+    LinkedNode _linked;
+
+    VMFunction *function;
+    size_t pc;
+    Value regs[0];
+} VMFrame;
 
 typedef struct VMState
 {
@@ -22,22 +43,12 @@ typedef struct VMState
     YoungGen *young_gen;
     Hash *global;
 
-    InstList *inst_list;
-    size_t pc;
-    Value regs[65536];
+    LinkedList functions;
+    LinkedList frames;
 } VMState;
 
-VMState *cvm_state_new(InstList *inst_list, StringPool *string_pool);
-
-static inline VMState*
-cvm_state_new_from_parse_state(ParseState *state)
-{
-    VMState *ret = cvm_state_new(state->inst_list, state->string_pool);
-    state->inst_list = NULL;
-    state->string_pool = NULL;
-
-    return ret;
-}
+VMState *cvm_state_new_from_parse_state(ParseState *state);
+VMState *cvm_state_new(InstList *main_inst_list, StringPool *string_pool);
 
 void cvm_state_run(VMState *vm);
 void cvm_state_destroy(VMState *vm);

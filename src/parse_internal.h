@@ -47,19 +47,91 @@ typedef struct ParseScope
     Hash *upper_table;
 } ParseScope;
 
+typedef struct FunctionScope
+{
+    LinkedNode _linked;
+
+    LinkedList scopes;
+    size_t arguments_nr;
+    size_t register_nr;
+    Hash *capture_list;
+    InstList *inst_list;
+} FunctionScope;
+
 int _lex_peak(ParseState *state);
 int _lex_next(ParseState *state);
 
-#define scope_stack_top(state)  (list_get(list_head(&state->scope_stack), ParseScope, _linked))
+#define function_stack_top(state)   (list_get(list_head(&state->function_stack), FunctionScope, _linked))
+#define scope_stack_top(state)      (list_get(list_head(&function_stack_top(state)->scopes), ParseScope, _linked))
+
+static inline Value
+_parse_capture_variable(ParseState *state, ParseScope *scope, CString *string)
+{
+    FunctionScope *function = container_of(list_from_node(&scope->_linked), FunctionScope, scopes);
+    intptr_t reg = 0;
+    Value result;
+    if (!value_is_undefined(result = hash_find(scope->symbol_table, (uintptr_t)string))) {
+        reg = value_to_int(result);
+    }
+    else {
+        reg = value_to_int(hash_find(scope->upper_table, (uintptr_t)string));
+    }
+
+    if (reg < 0) { return value_from_int(reg); }
+
+    function = list_get(list_prev(&function->_linked), FunctionScope, _linked);
+    while (function) {
+        size_t new_reg = hash_size(function->capture_list);
+        hash_set_and_update(function->capture_list, new_reg, value_from_int(reg));
+
+        ParseScope *base_scope = list_get(list_tail(&function->scopes), ParseScope, _linked);
+        hash_set_and_update(
+            base_scope->symbol_table,
+            (uintptr_t)string,
+            value_from_int(new_reg)
+        );
+
+        ParseScope *top_scope = list_get(list_head(&function->scopes), ParseScope, _linked);
+        if (top_scope != base_scope) {
+            hash_set_and_update(
+                top_scope->upper_table,
+                (uintptr_t)string,
+                value_from_int(new_reg)
+            );
+        }
+
+        reg = new_reg;
+        function = list_get(list_prev(&function->_linked), FunctionScope, _linked);
+    }
+
+    return value_from_int(reg);
+}
 
 static inline Value
 _parse_symbol_table_lookup(ParseState *state, CString *string)
 {
     Value result;
-    list_for_each(&state->scope_stack, node) {
-        ParseScope *scope = list_get(node, ParseScope, _linked);
-        if (!value_is_undefined(result = hash_find(scope->upper_table, (uintptr_t)string))) return result;
-        if (!value_is_undefined(result = hash_find(scope->symbol_table, (uintptr_t)string))) return result;
+    list_for_each(&state->function_stack, function_node) {
+        FunctionScope *function = list_get(function_node, FunctionScope, _linked);
+        list_for_each(&function->scopes, node) {
+            ParseScope *scope = list_get(node, ParseScope, _linked);
+            if (!value_is_undefined(result = hash_find(scope->symbol_table, (uintptr_t)string))) {
+                if (function != function_stack_top(state)) {
+                    return _parse_capture_variable(state, scope, string);
+                }
+                else {
+                    return result;
+                }
+            }
+            if (!value_is_undefined(result = hash_find(scope->upper_table, (uintptr_t)string))) {
+                if (function != function_stack_top(state)) {
+                    return _parse_capture_variable(state, scope, string);
+                }
+                else {
+                    return result;
+                }
+            }
+        }
     }
     return value_undefined();
 }
@@ -67,7 +139,8 @@ _parse_symbol_table_lookup(ParseState *state, CString *string)
 static inline ParseScope *
 _parse_find_define_scope(ParseState *state, CString *string)
 {
-    list_for_each(&state->scope_stack, node) {
+    FunctionScope *function = function_stack_top(state);
+    list_for_each(&function->scopes, node) {
         ParseScope *scope = list_get(node, ParseScope, _linked);
         if (!value_is_undefined(hash_find(scope->symbol_table, (uintptr_t)string))) return scope;
     }

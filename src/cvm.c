@@ -14,13 +14,21 @@
         hash_type_to_str(expected),                 \
         hash_type_to_str(actual))
 
+#define vm_frame_top(vm)    \
+    list_get(list_head(&vm->frames), VMFrame, _linked)
+
 inline void
 cvm_set_register(VMState *vm, unsigned int reg, Value value)
-{ if (reg) { vm->regs[reg] = value; } }
+{
+    if (reg) {
+        VMFrame *frame = vm_frame_top(vm);
+        frame->regs[reg] = value;
+    }
+}
 
 inline Value
 cvm_get_register(VMState *vm, unsigned int reg_id)
-{ return vm->regs[reg_id]; }
+{ return vm_frame_top(vm)->regs[reg_id]; }
 
 static inline Hash *
 _cvm_allocate_new_hash(VMState *vm, size_t capacity, int type)
@@ -77,37 +85,103 @@ _cvm_set_hash(VMState *vm, size_t reg, uintptr_t key, Value val)
     }
 }
 
+void
+cvm_state_push_frames(VMState *vm, VMFunction *function)
+{
+    VMFrame *frame = malloc(sizeof(VMFrame) + function->register_nr * sizeof(Value));
+    frame->function = function;
+    frame->pc = 0;
+    frame->regs[0] = value_from_int(0);
+    frame->regs[1] = value_from_ptr(vm->global);
+    for (size_t i = 2; i < function->register_nr; ++i) {
+        frame->regs[i] = value_undefined();
+    }
+
+    list_prepend(&vm->frames, &frame->_linked);
+}
+
 VMState *
-cvm_state_new(InstList *inst_list, StringPool *string_pool)
+cvm_state_new_from_parse_state(ParseState *state)
 {
     VMState *vm = malloc(sizeof(VMState));
-    if (!vm) return NULL;
+    vm->string_pool = state->string_pool;   state->string_pool = NULL;
+    vm->young_gen = young_gen_new();
+    vm->global = young_gen_new_hash(vm->young_gen, HASH_MIN_CAPACITY, HT_OBJECT);
+    list_init(&vm->functions);
+    list_init(&vm->frames);
 
+    list_move(&vm->functions, &state->functions);
+    VMFunction *main_function = parse_get_main_function(state);
+    inst_list_push(
+        main_function->inst_list,
+        cvm_inst_new_d_type(
+            I_HALT,
+            0, 0, 0
+        )
+    );
+
+    list_prepend(&vm->functions, &main_function->_linked);
+
+    cvm_state_push_frames(vm, main_function);
+
+    return vm;
+}
+
+VMState *
+cvm_state_new(InstList *main_inst_list, StringPool *string_pool)
+{
+    VMState *vm = malloc(sizeof(VMState));
     vm->string_pool = string_pool;
     vm->young_gen = young_gen_new();
-    vm->inst_list = inst_list;
-    vm->global = _cvm_allocate_new_object(vm, HASH_MIN_CAPACITY);
-    vm->pc = 0;
+    vm->global = young_gen_new_hash(vm->young_gen, HASH_MIN_CAPACITY, HT_OBJECT);
+    list_init(&vm->functions);
+    list_init(&vm->frames);
 
-    vm->regs[0] = value_from_int(0);
-    vm->regs[1] = value_from_ptr(vm->global);
-    for (size_t i = 2; i < 65536; ++i) {
-        vm->regs[i] = value_undefined();
-    }
+    VMFunction *main_function = malloc(sizeof(VMFunction));
+    list_node_init(&main_function->_linked);
+    main_function->arguments_nr = 0;
+    main_function->register_nr = 65536;
+    main_function->capture_list = hash_new(HASH_MIN_CAPACITY);
+    hash_set_and_update(main_function->capture_list, 0, value_from_int(0));
+
+    main_function->inst_list = main_inst_list;
+    if (!main_inst_list)    main_function->inst_list = inst_list_new(16);
+    inst_list_push(
+        main_function->inst_list,
+        cvm_inst_new_d_type(
+            I_HALT,
+            0, 0, 0
+        )
+    );
+
+    list_prepend(&vm->functions, &main_function->_linked);
+
+    cvm_state_push_frames(vm, main_function);
+
     return vm;
 }
 
 void
 cvm_state_destroy(VMState *vm)
 {
-    if (vm->inst_list) {
-        inst_list_destroy(vm->inst_list);
+    if (vm->string_pool) {
+        string_pool_destroy(vm->string_pool);
     }
     if (vm->young_gen) {
         young_gen_destroy(vm->young_gen);
     }
-    if (vm->string_pool) {
-        string_pool_destroy(vm->string_pool);
+    while (list_size(&vm->functions)) {
+        VMFunction *function = list_get(list_unlink(list_head(&vm->functions)), VMFunction, _linked);
+        if (function->capture_list) {
+            hash_destroy(function->capture_list);
+        }
+        if (function->inst_list) {
+            inst_list_destroy(function->inst_list);
+        }
+        free(function);
+    }
+    while (list_size(&vm->frames)) {
+        free(list_get(list_unlink(list_head(&vm->frames)), VMFrame, _linked));
     }
     free(vm);
 }
@@ -117,12 +191,17 @@ cvm_young_gc(VMState *vm)
 {
     young_gen_gc_start(vm->young_gen);
 
-    // TODO update it
-    for (size_t i = 0; i < 65536; ++i) {
-        if (value_is_ptr(vm->regs[i])) {
-            Hash *hash = _cvm_get_hash_in_register(vm, i);
-            young_gen_gc_mark(vm->young_gen, &hash);
-            cvm_set_register(vm, i, value_from_ptr(hash));
+    list_for_each(&vm->frames, frame_node) {
+        VMFrame *frame = list_get(frame_node, VMFrame, _linked);
+        for (size_t i = 0; i < frame->function->register_nr; ++i) {
+            if (value_is_ptr(frame->regs[i])) {
+                Hash *hash = value_to_ptr(frame->regs[i]);
+                while (hash->type == HT_REDIRECT) {
+                    hash = (Hash*)hash->size;
+                }
+                young_gen_gc_mark(vm->young_gen, &hash);
+                frame->regs[i] = value_from_ptr(hash);
+            }
         }
     }
 
@@ -148,7 +227,8 @@ void
 cvm_state_run(VMState *vm)
 {
     for (;;) {
-        Inst inst = vm->inst_list->insts[vm->pc++];
+        VMFrame *frame = vm_frame_top(vm);
+        Inst inst = frame->function->inst_list->insts[frame->pc++];
         switch (inst.type) {
             case I_HALT:
                 return;
@@ -240,18 +320,18 @@ cvm_state_run(VMState *vm)
                 break;
             case I_BNR:
                 if (!value_to_int(cvm_get_register(vm, inst.i_rd))) {
-                    vm->pc += inst.i_imm;
+                    frame->pc += inst.i_imm;
                 }
                 break;
             case I_J:
-                vm->pc = (size_t)inst.i_imm;
+                frame->pc = (size_t)inst.i_imm;
                 break;
             case I_JAL:
                 cvm_set_register(
                     vm, inst.i_rd,
-                    value_from_int(vm->pc)
+                    value_from_int(frame->pc)
                 );
-                vm->pc = (size_t)inst.i_imm;
+                frame->pc = (size_t)inst.i_imm;
                 break;
             case I_LSTR:
             {
@@ -324,7 +404,7 @@ cvm_state_run(VMState *vm)
                 break;
             }
             default:
-                error_f("Unknown VM instrument (offset %d)", vm->pc - 1);
+                error_f("Unknown VM instrument (offset %d)", frame->pc - 1);
                 break;
         }
     }

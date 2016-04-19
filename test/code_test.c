@@ -15,8 +15,6 @@ _vm_from_code_snippet(const char *code)
     ParseState *state = parse_state_new_from_string(code);
     parse(state);
 
-    inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-
     VMState *vm = cvm_state_new_from_parse_state(state);
 
     parse_state_destroy(state);
