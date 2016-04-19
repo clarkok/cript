@@ -16,7 +16,6 @@ _vm_from_code_snippet(const char *code)
     parse(state);
 
     inst_list_push(state->inst_list, cvm_inst_new_d_type(I_HALT, 0, 0, 0));
-    output_inst_list(stdout, state->inst_list);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
 
@@ -43,7 +42,24 @@ void
 code_light_function_test(CuTest *tc)
 {
     static const char TEST_CONTENT[] =
-        "let print_result = global.print(1, 2, 3, 4, 5);";
+        "let print_result = global.print(1, 2, 3, 4, 5);"
+    ;
+
+    VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
+
+    Value print = cvm_create_light_function(vm, _mock_print);
+    cvm_register_in_global(vm, print, "print");
+
+    cvm_state_run(vm);
+
+    (void)tc;
+}
+
+void
+code_left_hand_function_call_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "global.print(1, 2, 3, 4, 5);"
     ;
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
@@ -62,6 +78,7 @@ code_test_suite(void)
     CuSuite *suite = CuSuiteNew();
 
     SUITE_ADD_TEST(suite, code_light_function_test);
+    SUITE_ADD_TEST(suite, code_left_hand_function_call_test);
 
     return suite;
 }
