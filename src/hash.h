@@ -20,16 +20,39 @@ enum HashType
     HT_OBJECT,
     HT_ARRAY,
     HT_REDIRECT,
+    HT_LIGHTFUNC,
+
     HT_GC_LEFT,
 };
+
+static inline const char *
+hash_type_to_str(int type)
+{
+    static const char *LITERAL[] = {
+        "object",
+        "array",
+        "redirect",
+        "lightfunc",
+        "gc_left"
+    };
+
+    return LITERAL[type];
+}
+
+typedef Value (*light_function)(Value);
 
 typedef struct Hash
 {
     int type;
+    union {
+        light_function _func;
+    } _info;
     size_t capacity;
     size_t size;
     HashNode content[0];
 } Hash;
+
+#define hi_func     _info._func
 
 #define HASH_MIN_CAPACITY           (16)
 

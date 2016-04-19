@@ -103,6 +103,7 @@ hash_set(Hash *hash, uintptr_t key, Value value)
 void
 hash_rehash(Hash *dst, Hash *src)
 {
+    dst->_info = src->_info;
     HashNode *ptr, *limit;
     for (
         ptr = src->content, limit = src->content + src->capacity;

@@ -31,6 +31,9 @@ const char INST_NAME[] =
     "newarr  "
     "setobj  "
     "getobj  "
+
+    "call    "
+    "ret     "
 ;
 
 static_assert(8 * INST_NR + 1 == sizeof(INST_NAME), "Keep INST_NAME synced with insts");

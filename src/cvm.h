@@ -20,6 +20,7 @@ typedef struct VMState
 {
     StringPool *string_pool;
     YoungGen *young_gen;
+    Hash *global;
 
     InstList *inst_list;
     size_t pc;
@@ -45,5 +46,9 @@ Value cvm_get_register(VMState *vm, unsigned int reg_id);
 void cvm_set_register(VMState *vm, unsigned int reg_id, Value value);
 
 void cvm_young_gc(VMState *vm);
+
+Value cvm_create_light_function(VMState *vm, light_function func);
+
+void cvm_register_in_global(VMState *vm, Value value, const char *name);
 
 #endif //CRIPT_CVM_H

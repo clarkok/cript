@@ -95,6 +95,7 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
         *target = _young_gen_allocate(young_gen->replacement, new_size);
         hash_init(*target, _hash_shrink_size(hash), hash->type);
         hash_rehash(*target, hash);
+        (*target)->_info = hash->_info;
     }
     else {
         size_t total_size = _hash_total_size(hash->capacity);
@@ -121,6 +122,7 @@ young_gen_gc_mark(YoungGen *young_gen, Hash **target)
                 switch (child_hash->type) {
                     case HT_OBJECT:
                     case HT_ARRAY:
+                    case HT_LIGHTFUNC:
                         young_gen_gc_mark(young_gen, (Hash**)(&node->value));
                         break;
                     default:

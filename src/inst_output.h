@@ -34,6 +34,7 @@ output_inst(FILE *fout, Inst inst)
         case I_SLE:
         case I_SET_OBJ:
         case I_GET_OBJ:
+        case I_CALL:
             fprintf(fout, "$%d,\t$%d,\t$%d\n", inst.i_rd, inst.i_rs, inst.i_rt);
             break;
         case I_J:
@@ -50,6 +51,7 @@ output_inst(FILE *fout, Inst inst)
         }
         case I_NEW_OBJ:
         case I_NEW_ARR:
+        case I_RET:
             fprintf(fout, "$%d\n", inst.i_rd);
             break;
         default:

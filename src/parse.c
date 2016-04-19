@@ -347,6 +347,18 @@ _lex_next(ParseState *state)
     return ret;
 }
 
+static inline size_t
+_parse_allocate_register(ParseState *state)
+{ return scope_stack_top(state)->register_counter++; }
+
+static inline void
+_parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
+{ hash_set_and_update(scope->upper_table, (uintptr_t)string, value_from_int(reg)); }
+
+static inline void
+_parse_define_into_scope(ParseScope *scope, CString *string, size_t reg)
+{ hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg)); }
+
 ParseState *
 parse_state_new_from_string(const char *content)
 {
@@ -371,11 +383,12 @@ parse_state_new_from_string(const char *content)
     list_init(&state->scope_stack);
 
     ParseScope *scope = malloc(sizeof(ParseScope));
-    scope->register_counter = 1;
+    scope->register_counter = 2;
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
     scope->upper_table = hash_new(HASH_MIN_CAPACITY);
     list_prepend(&state->scope_stack, &scope->_linked);
 
+    _parse_define_into_scope(scope, string_pool_insert_str(&state->string_pool, "global"), 1);
     return state;
 }
 
@@ -423,18 +436,6 @@ _parse_join_scope(ParseState *state)
     hash_destroy(scope->symbol_table);
     free(scope);
 }
-
-static inline size_t
-_parse_allocate_register(ParseState *state)
-{ return scope_stack_top(state)->register_counter++; }
-
-static inline void
-_parse_insert_into_scope(ParseScope *scope, CString *string, size_t reg)
-{ hash_set_and_update(scope->upper_table, (uintptr_t)string, value_from_int(reg)); }
-
-static inline void
-_parse_define_into_scope(ParseScope *scope, CString *string, size_t reg)
-{ hash_set_and_update(scope->symbol_table, (uintptr_t)string, value_from_int(reg)); }
 
 static inline void
 _parse_inject_reserved(ParseState *state, CString *reserved[])
@@ -1079,29 +1080,6 @@ _parse_right_hand_expr(ParseState *state)
 void
 _parse_assignment_expr(ParseState *state)
 {
-    /*
-    int tok = _lex_next(state);
-    if (tok != TOK_ID) {
-        parse_expect_error(state, "Identifier", tok);
-        return;
-    }
-
-    CString *literal = (CString*)state->peaking_value;
-    if (!_parse_exists_in_symbol_table(state, literal)) {
-        parse_error(state, "Undefined identifier: '%.*s'",
-                    literal->length,
-                    literal->content
-        );
-        return;
-    }
-
-    intptr_t reg = _parse_find_in_symbol_table(state, literal);
-    if (reg < 0) {
-        parse_expect_error(state, "Identifier", tok);
-        return;
-    }
-     */
-
     size_t this_reg = _parse_unary_expr(state);
     size_t key_reg = 0;
     int tok = _lex_peak(state);
