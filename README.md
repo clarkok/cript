@@ -22,6 +22,7 @@ A simple and lightweight script language.
  * register-based VM
  * SSA-like IR
  * able to register C functions
+ * zero dependency except libc
 
 ## Current limitation
 
