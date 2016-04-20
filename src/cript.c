@@ -11,6 +11,8 @@
 
 #include "libs.h"
 
+#include "inst_output.h"
+
 int
 main(int argc, const char **argv)
 {

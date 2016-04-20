@@ -863,6 +863,29 @@ parse_function_argument_test(CuTest *tc)
     parse_state_destroy(state);
 }
 
+void
+parse_let_stmt_buggy_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let a = 1;\n"
+        "let b = a;\n"
+        "a = a + 1;\n"
+        "return b;\n"
+    ;
+
+    ParseState *state = parse_state_new_from_string(TEST_CONTENT);
+    parse(state);
+
+    VMState *vm = cvm_state_new_from_parse_state(state);
+
+    Value ret_val = cvm_state_run(vm);
+
+    CuAssertIntEquals(tc, 1, value_to_int(ret_val));
+
+    cvm_state_destroy(vm);
+    parse_state_destroy(state);
+}
+
 CuSuite *
 parse_test_suite(void)
 {
@@ -893,6 +916,7 @@ parse_test_suite(void)
     SUITE_ADD_TEST(suite, parse_nested_block_buggy_test);
     SUITE_ADD_TEST(suite, parse_function_parse_test);
     SUITE_ADD_TEST(suite, parse_function_argument_test);
+    SUITE_ADD_TEST(suite, parse_let_stmt_buggy_test);
 
     return suite;
 }

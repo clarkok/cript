@@ -1389,7 +1389,7 @@ void
 _parse_assignment_expr(ParseState *state)
 {
     size_t object_reg = _parse_unary_expr(state);
-    size_t this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
+    size_t this_reg = (size_t)_parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
     size_t key_reg = 0;
     int tok = _lex_peak(state);
     CString *literal = (CString*)state->peaking_value;
@@ -1410,7 +1410,7 @@ _parse_assignment_expr(ParseState *state)
             );
 
             object_reg = temp_reg;
-            this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
+            this_reg = (size_t)_parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
             key_reg = 0;
 
             tok = _lex_peak(state);
@@ -1544,7 +1544,22 @@ _parse_let_stmt(ParseState *state)
 
         if (_lex_peak(state) == '=') {
             _lex_next(state);
-            _parse_define_into_scope(scope_stack_top(state), literal, _parse_right_hand_expr(state));
+            size_t reg_count = function_stack_top(state)->register_nr;
+            size_t new_reg = _parse_right_hand_expr(state);
+            if (function_stack_top(state)->register_nr == reg_count) {
+                size_t temp_reg = _parse_allocate_register(state);
+                _parse_push_inst(
+                    state,
+                    cvm_inst_new_d_type(
+                        I_MOV,
+                        temp_reg,
+                        new_reg,
+                        0
+                    )
+                );
+                new_reg = temp_reg;
+            }
+            _parse_define_into_scope(scope_stack_top(state), literal, new_reg);
         }
         else {
             _parse_define_into_scope(scope_stack_top(state), literal, 0);

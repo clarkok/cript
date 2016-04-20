@@ -65,7 +65,7 @@ _string_expand_size(size_t original_capacity)
 
 static inline int
 _string_hash_need_expand(size_t size, size_t capacity)
-{ return size > (capacity - (capacity >> 2)); }
+{ return size > (capacity - (capacity >> 1)); }
 
 static inline void
 _string_hash_insert(StringPool *pool, uintptr_t key, CString *string)
