@@ -5,6 +5,6 @@
 #ifndef CRIPT_CRIPT_H
 #define CRIPT_CRIPT_H
 
-#define CRIPT_VERSION "0.0.1"
+#define CRIPT_VERSION "0.1.0"
 
 #endif //CRIPT_CRIPT_H
