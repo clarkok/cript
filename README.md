@@ -5,7 +5,7 @@ A simple and lightweight script language.
 ## Language feature
 
  * supported types
-   * 29bits signed integer
+   * 30bits signed integer
    * 256byte-max-length internal string
    * hash-based Object and Array
    * value-captured Closure
@@ -46,6 +46,13 @@ make
 
 ```
 ./path/to/cript ./path/to/script.cr
+```
+
+## Hello world!
+
+```
+// save it to hello_world.cr and run it!
+global.println('Hello World!');
 ```
 
 ## Example scripts
