@@ -174,8 +174,8 @@ lex_test(CuTest *tc)
 #define get_reg_from_parse_state(state, name)   \
     _parse_find_in_symbol_table(state, (uintptr_t)string_pool_find_str(state->string_pool, name))
 
-#define get_reg_value_from_vm(vm, reg)  \
-    list_get(list_head(&vm->frames), VMFrame, _linked)->regs[reg]
+#define get_reg_value_from_vm(vm, reg)          \
+    list_get(list_head(&list_get(list_head(&vm->scenes), VMScene, _linked)->frames), VMFrame, _linked)->regs[reg]
 
 void
 parse_test(CuTest *tc)

@@ -37,6 +37,13 @@ typedef struct VMFrame
     Value regs[0];
 } VMFrame;
 
+typedef struct VMScene
+{
+    LinkedNode _linked;
+    LinkedList frames;
+    Hash *external;
+} VMScene;
+
 typedef struct VMState
 {
     StringPool *string_pool;
@@ -44,14 +51,15 @@ typedef struct VMState
     Hash *global;
 
     LinkedList functions;
-    LinkedList frames;
+    LinkedList scenes;
 } VMState;
 
 VMState *cvm_state_new_from_parse_state(ParseState *state);
 VMState *cvm_state_new(InstList *main_inst_list, StringPool *string_pool);
+void cvm_state_destroy(VMState *vm);
 
 Value cvm_state_run(VMState *vm);
-void cvm_state_destroy(VMState *vm);
+Value cvm_state_call_function(VMState *vm, Value func, Value args);
 
 Value cvm_get_register(VMState *vm, unsigned int reg_id);
 void cvm_set_register(VMState *vm, unsigned int reg_id, Value value);
@@ -60,6 +68,11 @@ void cvm_young_gc(VMState *vm);
 
 Value cvm_create_light_function(VMState *vm, light_function func);
 Value cvm_create_userdata(VMState *vm, void *data, userdata_destructor destructor);
+
+Hash *cvm_get_global(VMState *vm);
+Hash *cvm_create_object(VMState *vm, size_t capacity);
+Hash *cvm_create_array(VMState *vm, size_t capacity);
+Hash *cvm_set_hash(VMState *vm, Hash *hash, uintptr_t key, Value val);
 
 void cvm_register_in_global(VMState *vm, Value value, const char *name);
 

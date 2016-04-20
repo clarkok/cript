@@ -22,7 +22,7 @@ _vm_from_code_snippet(const char *code)
     return vm;
 }
 
-static Value _mock_print(VMState *vm, Value value)
+static Value _print(VMState *vm, Value value)
 {
     Hash *args = value_to_ptr(value);
 
@@ -64,7 +64,7 @@ code_light_function_test(CuTest *tc)
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    Value print = cvm_create_light_function(vm, _mock_print);
+    Value print = cvm_create_light_function(vm, _print);
     cvm_register_in_global(vm, print, "print");
 
     cvm_state_run(vm);
@@ -80,7 +80,7 @@ code_left_hand_function_call_test(CuTest *tc)
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    Value print = cvm_create_light_function(vm, _mock_print);
+    Value print = cvm_create_light_function(vm, _print);
     cvm_register_in_global(vm, print, "print");
 
     cvm_state_run(vm);
@@ -97,7 +97,7 @@ code_pass_function_around_test(CuTest *tc)
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    Value print = cvm_create_light_function(vm, _mock_print);
+    Value print = cvm_create_light_function(vm, _print);
     cvm_register_in_global(vm, print, "print");
 
     cvm_state_run(vm);
@@ -141,7 +141,7 @@ code_sort_test(CuTest *tc)
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    cvm_register_in_global(vm, cvm_create_light_function(vm, _mock_print), "print");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _print), "print");
     cvm_register_in_global(vm, cvm_create_light_function(vm, _random), "random");
     cvm_register_in_global(vm, cvm_create_light_function(vm, _assert), "assert");
 
@@ -174,7 +174,7 @@ code_closure_test(CuTest *tc)
 
     VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
 
-    cvm_register_in_global(vm, cvm_create_light_function(vm, _mock_print), "print");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _print), "print");
     cvm_register_in_global(vm, cvm_create_light_function(vm, _random), "random");
     cvm_register_in_global(vm, cvm_create_light_function(vm, _assert), "assert");
 
@@ -230,6 +230,48 @@ code_userdata_test(CuTest *tc)
     (void)tc;
 }
 
+static Value _for_each(VMState *vm, Value args_val)
+{
+    Hash *args = value_to_ptr(args_val);
+    Hash *array = value_to_ptr(hash_find(args, 1));
+    Value func = hash_find(args, 2);
+
+    for (size_t i = 0; i < hash_size(array); ++i) {
+        Hash *arg_for_child = cvm_create_array(vm, HASH_MIN_CAPACITY);
+
+        arg_for_child = cvm_set_hash(vm, arg_for_child, 0, value_from_ptr(cvm_get_global(vm)));
+        arg_for_child = cvm_set_hash(vm, arg_for_child, 1, hash_find(array, i));
+
+        cvm_state_call_function(vm, func, value_from_ptr(arg_for_child));
+    }
+
+    return value_undefined();
+}
+
+void
+code_foreach_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let array = [];\n"
+        "let i = 0;\n"
+        "while (i < 10) {\n"
+        "  array[i] = i;\n"
+        "  i = i + 1;\n"
+        "}\n"
+        "global.for_each(array, function (x) {\n"
+        "  global.print(x);\n"
+        "});\n"
+    ;
+
+    VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
+
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _for_each), "for_each");
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _print), "print");
+
+    cvm_state_run(vm);
+    (void)tc;
+}
+
 CuSuite *
 code_test_suite(void)
 {
@@ -241,6 +283,7 @@ code_test_suite(void)
     SUITE_ADD_TEST(suite, code_sort_test);
     SUITE_ADD_TEST(suite, code_closure_test);
     SUITE_ADD_TEST(suite, code_userdata_test);
+    SUITE_ADD_TEST(suite, code_foreach_test);
 
     return suite;
 }

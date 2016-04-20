@@ -17,8 +17,11 @@
         hash_type_to_str(expected),                 \
         hash_type_to_str(actual))
 
+#define vm_scene_top(vm)    \
+    list_get(list_head(&vm->scenes), VMScene, _linked)
+
 #define vm_frame_top(vm)    \
-    list_get(list_head(&vm->frames), VMFrame, _linked)
+    list_get(list_head(&(vm_scene_top(vm)->frames)), VMFrame, _linked)
 
 inline void
 cvm_set_register(VMState *vm, unsigned int reg, Value value)
@@ -78,8 +81,27 @@ _cvm_get_hash_in_register(VMState *vm, size_t reg)
     return hash;
 }
 
+static inline Hash *
+_cvm_set_hash(VMState *vm, Hash *hash, uintptr_t key, Value val)
+{
+    hash_set(hash, key, val);
+    if (hash_need_expand(hash)) {
+        Hash *new_hash = _cvm_allocate_new_hash(vm, _hash_expand_size(hash), hash->type);
+        if (hash->type == HT_GC_LEFT) {
+            hash = (Hash*)hash->size;
+        }
+        hash_rehash(new_hash, hash);
+        hash->type = HT_REDIRECT;
+        hash->capacity = 0;
+        hash->size = (size_t)new_hash;
+
+        hash = new_hash;
+    }
+    return hash;
+}
+
 static inline void
-_cvm_set_hash(VMState *vm, size_t reg, uintptr_t key, Value val)
+_cvm_set_hash_in_register(VMState *vm, size_t reg, uintptr_t key, Value val)
 {
     Hash *obj = _cvm_get_hash_in_register(vm, reg);
     hash_set(obj, key, val);
@@ -107,12 +129,32 @@ cvm_state_push_frame(VMState *vm, VMFunction *function)
         frame->regs[i] = value_undefined();
     }
 
-    list_prepend(&vm->frames, &frame->_linked);
+    list_prepend(&vm_scene_top(vm)->frames, &frame->_linked);
 }
 
 static inline void
 cvm_state_pop_frame(VMState *vm)
-{ free(list_get(list_unlink(list_head(&vm->frames)), VMFrame, _linked)); }
+{ free(list_get(list_unlink(list_head(&vm_scene_top(vm)->frames)), VMFrame, _linked)); }
+
+static inline void
+_cvm_push_scene(VMState *vm)
+{
+    VMScene *scene = malloc(sizeof(VMScene));
+    list_init(&scene->frames);
+    scene->external = _cvm_allocate_new_array(vm, HASH_MIN_CAPACITY);
+    list_prepend(&vm->scenes, &scene->_linked);
+}
+
+static inline void
+_cvm_pop_scene(VMState *vm)
+{
+    VMScene *scene = vm_scene_top(vm);
+    list_unlink(&scene->_linked);
+    while (list_size(&scene->frames)) {
+        free(list_get(list_unlink(list_head(&scene->frames)), VMFrame, _linked));
+    }
+    free(scene);
+}
 
 VMState *
 cvm_state_new_from_parse_state(ParseState *state)
@@ -122,7 +164,9 @@ cvm_state_new_from_parse_state(ParseState *state)
     vm->young_gen = young_gen_new();
     vm->global = young_gen_new_hash(vm->young_gen, HASH_MIN_CAPACITY, HT_OBJECT);
     list_init(&vm->functions);
-    list_init(&vm->frames);
+    list_init(&vm->scenes);
+
+    _cvm_push_scene(vm);
 
     list_move(&vm->functions, &state->functions);
     VMFunction *main_function = parse_get_main_function(state);
@@ -149,7 +193,9 @@ cvm_state_new(InstList *main_inst_list, StringPool *string_pool)
     vm->young_gen = young_gen_new();
     vm->global = young_gen_new_hash(vm->young_gen, HASH_MIN_CAPACITY, HT_OBJECT);
     list_init(&vm->functions);
-    list_init(&vm->frames);
+    list_init(&vm->scenes);
+
+    _cvm_push_scene(vm);
 
     VMFunction *main_function = malloc(sizeof(VMFunction));
     list_node_init(&main_function->_linked);
@@ -194,8 +240,13 @@ cvm_state_destroy(VMState *vm)
         }
         free(function);
     }
-    while (list_size(&vm->frames)) {
-        free(list_get(list_unlink(list_head(&vm->frames)), VMFrame, _linked));
+    while (list_size(&vm->scenes)) {
+        VMScene *scene = vm_scene_top(vm);
+        list_unlink(&scene->_linked);
+        while (list_size(&scene->frames)) {
+            free(list_get(list_unlink(list_head(&scene->frames)), VMFrame, _linked));
+        }
+        free(scene);
     }
     free(vm);
 }
@@ -207,16 +258,20 @@ cvm_young_gc(VMState *vm)
 
     young_gen_gc_mark(vm->young_gen, &vm->global);
 
-    list_for_each(&vm->frames, frame_node) {
-        VMFrame *frame = list_get(frame_node, VMFrame, _linked);
-        for (size_t i = 0; i <= frame->function->register_nr; ++i) {
-            if (value_is_ptr(frame->regs[i]) && !value_is_null(frame->regs[i])) {
-                Hash *hash = value_to_ptr(frame->regs[i]);
-                while (hash->type == HT_REDIRECT) {
-                    hash = (Hash*)hash->size;
+    list_for_each(&vm->scenes, scene_node) {
+        VMScene *scene = list_get(scene_node, VMScene, _linked);
+        young_gen_gc_mark(vm->young_gen, &scene->external);
+        list_for_each(&scene->frames, frame_node) {
+            VMFrame *frame = list_get(frame_node, VMFrame, _linked);
+            for (size_t i = 0; i <= frame->function->register_nr; ++i) {
+                if (value_is_ptr(frame->regs[i]) && !value_is_null(frame->regs[i])) {
+                    Hash *hash = value_to_ptr(frame->regs[i]);
+                    while (hash->type == HT_REDIRECT) {
+                        hash = (Hash*)hash->size;
+                    }
+                    young_gen_gc_mark(vm->young_gen, &hash);
+                    frame->regs[i] = value_from_ptr(hash);
                 }
-                young_gen_gc_mark(vm->young_gen, &hash);
-                frame->regs[i] = value_from_ptr(hash);
             }
         }
     }
@@ -244,8 +299,77 @@ void
 cvm_register_in_global(VMState *vm, Value value, const char *name)
 {
     CString *key = string_pool_insert_str(&vm->string_pool, name);
-    _cvm_set_hash(vm, 1, (uintptr_t)key, value);
+    _cvm_set_hash_in_register(vm, 1, (uintptr_t) key, value);
 }
+
+static inline void
+_cvm_setup_function_frame(VMState *vm, Hash *closure, Hash *args)
+{
+    for (size_t i = 0; i <= closure->hi_closure->arguments_nr; ++i) {
+        cvm_set_register(vm, i + 1, hash_find(args, i));
+    }
+
+    hash_for_each(closure, captured) {
+        cvm_set_register(vm, captured->key, captured->value);
+    }
+}
+
+Value
+cvm_state_call_function(VMState *vm, Value func_val, Value args_val)
+{
+    if (!value_is_ptr(func_val) || !value_is_ptr(args_val)) {
+        type_error(vm, "function");
+        return value_undefined();
+    }
+
+    Hash *func = value_to_ptr(func_val);
+    Hash *args = value_to_ptr(args_val);
+
+    _cvm_push_scene(vm);
+
+    cvm_state_push_frame(vm, func->hi_closure);
+    _cvm_setup_function_frame(vm, func, args);
+
+    Value ret = cvm_state_run(vm);
+
+    _cvm_pop_scene(vm);
+
+    return ret;
+}
+
+Hash *
+cvm_get_global(VMState *vm)
+{ return vm->global; }
+
+Hash *
+cvm_create_object(VMState *vm, size_t capacity)
+{
+    Hash *hash = _cvm_allocate_new_hash(vm, capacity, HT_OBJECT);
+    vm_scene_top(vm)->external = _cvm_set_hash(
+        vm,
+        vm_scene_top(vm)->external,
+        hash_size(vm_scene_top(vm)->external),
+        value_from_ptr(hash)
+    );
+    return hash;
+}
+
+Hash *
+cvm_create_array(VMState *vm, size_t capacity)
+{
+    Hash *hash = _cvm_allocate_new_hash(vm, capacity, HT_ARRAY);
+    vm_scene_top(vm)->external = _cvm_set_hash(
+        vm,
+        vm_scene_top(vm)->external,
+        hash_size(vm_scene_top(vm)->external),
+        value_from_ptr(hash)
+    );
+    return hash;
+}
+
+Hash *
+cvm_set_hash(VMState *vm, Hash *hash, uintptr_t key, Value val)
+{ return _cvm_set_hash(vm, hash, key, val); }
 
 Value
 cvm_state_run(VMState *vm)
@@ -400,7 +524,7 @@ cvm_state_run(VMState *vm)
                 else {
                     key = (uintptr_t)value_to_int(cvm_get_register(vm, inst.i_rt));
                 }
-                _cvm_set_hash(vm, inst.i_rd, key, cvm_get_register(vm, inst.i_rs));
+                _cvm_set_hash_in_register(vm, inst.i_rd, key, cvm_get_register(vm, inst.i_rs));
                 break;
             }
             case I_GET_OBJ:
@@ -430,16 +554,8 @@ cvm_state_run(VMState *vm)
                 }
                 else if (func->type == HT_CLOSURE) {
                     Hash *args = _cvm_get_hash_in_register(vm, inst.i_rt);
-
                     cvm_state_push_frame(vm, func->hi_closure);
-
-                    for (size_t i = 0; i <= func->hi_closure->arguments_nr; ++i) {
-                        cvm_set_register(vm, i + 1, hash_find(args, i));
-                    }
-
-                    hash_for_each(func, captured) {
-                        cvm_set_register(vm, captured->key, captured->value);
-                    }
+                    _cvm_setup_function_frame(vm, func, args);
                 }
                 else {
                     hash_type_error(vm, HT_LIGHTFUNC, func->type);
@@ -450,7 +566,7 @@ cvm_state_run(VMState *vm)
             {
                 Value ret_val = cvm_get_register(vm, inst.i_rd);
                 cvm_state_pop_frame(vm);
-                if (!list_size(&vm->frames)) { return ret_val; }
+                if (!list_size(&vm_scene_top(vm)->frames)) { return ret_val; }
                 Inst original_inst = vm_frame_top(vm)->function->inst_list->insts[vm_frame_top(vm)->pc - 1];
                 cvm_set_register(vm, original_inst.i_rd, ret_val);
                 break;
