@@ -2,6 +2,8 @@
 
 A simple and lightweight script language.
 
+[中文介绍](https://www.clarkok.com/blog/2016/04/20/Cript%E4%B8%80%E9%97%A8%E8%84%9A%E6%9C%AC%E8%AF%AD%E8%A8%80/)
+
 ## Language feature
 
  * supported types
