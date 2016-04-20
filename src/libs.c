@@ -4,6 +4,7 @@
 
 #include <math.h>
 
+#include "error.h"
 #include "libs.h"
 
 #define register_function(vm, func, name)   \
@@ -199,20 +200,56 @@ _lib_parse_number(VMState *vm, Value value)
     return value_from_int(ret_val);
 }
 
+static Value
+_lib_char_at(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    CString *string = value_to_string(hash_find(args, 1));
+    int index = value_to_int(hash_find(args, 2));
+
+    if (index < 0 || index >= string->length) {
+        error_f("Out of range when get char_at(%.*s, %d)", string->length, string->content, index);
+        return value_undefined();
+    }
+
+    char buffer[2];
+    buffer[0] = string->content[index];
+    buffer[1] = 0;
+
+    return cvm_get_cstring_value(vm, buffer);
+}
+
+static Value
+_lib_char_code_at(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    CString *string = value_to_string(hash_find(args, 1));
+    int index = value_to_int(hash_find(args, 2));
+
+    if (index < 0 || index >= string->length) {
+        error_f("Out of range when get char_at(%.*s, %d)", string->length, string->content, index);
+        return value_undefined();
+    }
+
+    return value_from_int(string->content[index]);
+}
+
 void
 lib_register(VMState *vm)
 {
-    register_value(vm, value_undefined(), "undefined");
     register_value(vm, value_null(), "null");
+    register_value(vm, value_undefined(), "undefined");
 
+    register_function(vm, _lib_char_at, "char_at");
+    register_function(vm, _lib_char_code_at, "char_code_at");
+    register_function(vm, _lib_concat, "concat");
+    register_function(vm, _lib_foreach, "foreach");
+    register_function(vm, _lib_import, "import");
+    register_function(vm, _lib_parse_number, "parse_number");
     register_function(vm, _lib_print, "print");
     register_function(vm, _lib_println, "println");
-    register_function(vm, _lib_foreach, "foreach");
     register_function(vm, _lib_random, "random");
-    register_function(vm, _lib_import, "import");
-    register_function(vm, _lib_concat, "concat");
-    register_function(vm, _lib_typeof, "typeof");
     register_function(vm, _lib_sizeof, "sizeof");
     register_function(vm, _lib_to_string, "to_string");
-    register_function(vm, _lib_parse_number, "parse_number");
+    register_function(vm, _lib_typeof, "typeof");
 }
