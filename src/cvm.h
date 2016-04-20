@@ -78,4 +78,8 @@ Hash *cvm_set_hash(VMState *vm, Hash *hash, uintptr_t key, Value val);
 
 void cvm_register_in_global(VMState *vm, Value value, const char *name);
 
+static inline Value
+cvm_get_cstring_value(VMState *vm, const char *string)
+{ return value_from_string(string_pool_insert_str(&vm->string_pool, string)); }
+
 #endif //CRIPT_CVM_H

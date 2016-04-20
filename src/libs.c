@@ -85,6 +85,117 @@ _lib_import(VMState *vm, Value value)
     return ret;
 }
 
+static Value
+_lib_concat(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+
+    char buffer[256],
+        *ptr = buffer;
+
+    for (size_t i = 1; i < hash_size(args); ++i) {
+        CString *string = value_to_string(hash_find(args, i));
+        strncpy(ptr, string->content, 255 - (ptr - buffer));
+        ptr += string->length;
+        if (ptr - buffer >= 255) {
+            ptr = buffer + 255;
+            break;
+        }
+    }
+
+    return value_from_string(string_pool_insert_vec(&vm->string_pool, buffer, ptr - buffer));
+}
+
+static Value
+_lib_typeof(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    Value query_val = hash_find(args, 1);
+
+    if (value_is_int(query_val)) {
+        return cvm_get_cstring_value(vm, "integer");
+    }
+    else if (value_is_string(query_val)) {
+        return cvm_get_cstring_value(vm, "string");
+    }
+    else if (value_is_null(query_val)) {
+        return cvm_get_cstring_value(vm, "null");
+    }
+    else if (value_is_undefined(query_val)) {
+        return cvm_get_cstring_value(vm, "undefined");
+    }
+    else {
+        Hash *hash = value_to_ptr(query_val);
+        while (hash->type == HT_REDIRECT) hash = (Hash*)hash->size;
+        assert(hash->type != HT_GC_LEFT);
+
+        switch (hash->type) {
+            case HT_OBJECT:         return cvm_get_cstring_value(vm, "object");
+            case HT_ARRAY:          return cvm_get_cstring_value(vm, "array");
+            case HT_LIGHTFUNC:      return cvm_get_cstring_value(vm, "light_function");
+            case HT_CLOSURE:        return cvm_get_cstring_value(vm, "closure");
+            case HT_USERDATA:       return cvm_get_cstring_value(vm, "userdata");
+            default: assert(0);
+        }
+    }
+}
+
+static Value
+_lib_sizeof(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    Value query_val = hash_find(args, 1);
+
+    if (value_is_string(query_val)) {
+        CString *string = value_to_string(query_val);
+        return value_from_int(string->length);
+    }
+    else if (value_is_ptr(query_val)) {
+        Hash *hash = value_to_ptr(query_val);
+        while (hash->type == HT_REDIRECT) hash = (Hash*)hash->size;
+        assert(hash->type != HT_GC_LEFT);
+
+        switch (hash->type) {
+            case HT_OBJECT:
+            case HT_ARRAY:
+                return value_from_int(hash_size(hash));
+            case HT_LIGHTFUNC:
+            case HT_CLOSURE:
+            case HT_USERDATA:
+                return value_from_int(-1);
+            default: assert(0);
+        }
+    }
+
+    return value_from_int(-1);
+}
+
+static Value
+_lib_to_string(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    Value query_val = hash_find(args, 1);
+
+    if (value_is_int(query_val)) {
+        char buffer[30];
+        sprintf(buffer, "%d", value_to_int(query_val));
+        return cvm_get_cstring_value(vm, buffer);
+    }
+    else {
+        return _lib_typeof(vm, value);
+    }
+}
+
+static Value
+_lib_parse_number(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    CString *string = value_to_string(hash_find(args, 1));
+    int ret_val;
+    sscanf(string->content, "%d", &ret_val);
+    return value_from_int(ret_val);
+}
+
 void
 lib_register(VMState *vm)
 {
@@ -93,4 +204,9 @@ lib_register(VMState *vm)
     register_function(vm, _lib_foreach, "foreach");
     register_function(vm, _lib_random, "random");
     register_function(vm, _lib_import, "import");
+    register_function(vm, _lib_concat, "concat");
+    register_function(vm, _lib_typeof, "typeof");
+    register_function(vm, _lib_sizeof, "sizeof");
+    register_function(vm, _lib_to_string, "to_string");
+    register_function(vm, _lib_parse_number, "parse_number");
 }
