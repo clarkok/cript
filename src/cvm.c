@@ -345,24 +345,30 @@ _cvm_setup_function_frame(VMState *vm, Hash *closure, Hash *args)
 Value
 cvm_state_call_function(VMState *vm, Value func_val, Value args_val)
 {
-    if (!value_is_ptr(func_val) || !value_is_ptr(args_val)) {
+    if (!value_is_ptr(func_val) || !value_to_ptr(args_val)) {
         type_error(vm, "function");
         return value_undefined();
     }
 
     Hash *func = value_to_ptr(func_val);
-    Hash *args = value_to_ptr(args_val);
 
-    _cvm_push_scene(vm);
+    if (func->type == HT_LIGHTFUNC) {
+        return func->hi_func(vm, args_val);
+    }
+    else {
+        Hash *args = value_to_ptr(args_val);
 
-    cvm_state_push_frame(vm, func->hi_closure);
-    _cvm_setup_function_frame(vm, func, args);
+        _cvm_push_scene(vm);
 
-    Value ret = cvm_state_run(vm);
+        cvm_state_push_frame(vm, func->hi_closure);
+        _cvm_setup_function_frame(vm, func, args);
 
-    _cvm_pop_scene(vm);
+        Value ret = cvm_state_run(vm);
 
-    return ret;
+        _cvm_pop_scene(vm);
+
+        return ret;
+    }
 }
 
 Hash *
