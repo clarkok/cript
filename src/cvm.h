@@ -59,6 +59,7 @@ void cvm_set_register(VMState *vm, unsigned int reg_id, Value value);
 void cvm_young_gc(VMState *vm);
 
 Value cvm_create_light_function(VMState *vm, light_function func);
+Value cvm_create_userdata(VMState *vm, void *data, userdata_destructor destructor);
 
 void cvm_register_in_global(VMState *vm, Value value, const char *name);
 

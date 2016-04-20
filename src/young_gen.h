@@ -26,6 +26,7 @@ YoungGen *young_gen_new();
 void young_gen_destroy(YoungGen *young_gen);
 
 Hash *young_gen_new_hash(YoungGen *young_gen, size_t capacity, int type);
+Hash *young_gen_new_userdata(YoungGen *young_gen, void *data, userdata_destructor destructor);
 
 void young_gen_gc_start(YoungGen *young_gen);
 void young_gen_gc_mark(YoungGen *young_gen, Hash **target);

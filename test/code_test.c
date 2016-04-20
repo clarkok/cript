@@ -182,6 +182,54 @@ code_closure_test(CuTest *tc)
     (void)tc;
 }
 
+typedef struct LongString
+{
+    size_t length;
+    char content[0];
+} LongString;
+
+static void
+_long_string_destructor(void *ptr)
+{
+    LongString *long_str = ptr;
+    printf("long string destructed: %.*ss\n", long_str->length, long_str->content);
+    free(ptr);
+}
+
+static Value _new_long_string(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    CString *string = value_to_string(hash_find(args, 1));
+    LongString *long_string = malloc(sizeof(LongString) + string->length + 1);
+    long_string->length = string->length;
+    strncpy(long_string->content, string->content, string->length);
+
+    return cvm_create_userdata(vm, long_string, _long_string_destructor);
+}
+
+void
+code_userdata_test(CuTest *tc)
+{
+    static const char TEST_CONTENT[] =
+        "let test_func = function () {\n"
+        "  let t = global.new_long_string('test_long_string');\n"
+        "};\n"
+        "test_func();\n"
+        "let i = 0;\n"
+        "while (i < 300000) {\n"
+        "  let a = {};\n"
+        "  i = i + 1;\n"
+        "}\n"
+    ;
+
+    VMState *vm = _vm_from_code_snippet(TEST_CONTENT);
+
+    cvm_register_in_global(vm, cvm_create_light_function(vm, _new_long_string), "new_long_string");
+
+    cvm_state_run(vm);
+    (void)tc;
+}
+
 CuSuite *
 code_test_suite(void)
 {
@@ -192,6 +240,7 @@ code_test_suite(void)
     SUITE_ADD_TEST(suite, code_pass_function_around_test);
     SUITE_ADD_TEST(suite, code_sort_test);
     SUITE_ADD_TEST(suite, code_closure_test);
+    SUITE_ADD_TEST(suite, code_userdata_test);
 
     return suite;
 }

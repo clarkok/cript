@@ -21,6 +21,8 @@ enum InstType
 
     I_LNOT,
 
+    I_MOV,
+
     I_BNR,
     I_J,
     I_JAL,

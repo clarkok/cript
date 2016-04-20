@@ -20,6 +20,7 @@ const char INST_NAME[] =
     "sle     "
 
     "lnot    "
+    "mov     "
 
     "bnr     "
     "j       "

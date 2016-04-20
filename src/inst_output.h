@@ -42,6 +42,7 @@ output_inst(FILE *fout, Inst inst)
             fprintf(fout, "%d\n", inst.i_imm);
             break;
         case I_LNOT:
+        case I_MOV:
             fprintf(fout, "$%d,\t$%d\n", inst.i_rd, inst.i_rs);
             break;
         case I_LSTR:

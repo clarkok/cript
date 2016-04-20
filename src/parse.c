@@ -468,7 +468,7 @@ _parse_join_scope(ParseState *state)
     hash_for_each(scope->upper_table, node) {
         _parse_push_inst(state,
                        cvm_inst_new_d_type(
-                           I_ADD,
+                           I_MOV,
                            (size_t)_parse_find_in_symbol_table(state, node->key),
                            (size_t)value_to_int(node->value),
                            0
@@ -666,7 +666,7 @@ _parse_array_literal(ParseState *state)
                 _parse_push_inst(
                     state,
                     cvm_inst_new_d_type(
-                        I_ADD,
+                        I_MOV,
                         key_reg,
                         value_reg,
                         0
@@ -1264,7 +1264,7 @@ _parse_logic_and_expr(ParseState *state)
             _parse_push_inst(
                 state,
                 cvm_inst_new_d_type(
-                    I_ADD,
+                    I_MOV,
                     temp_reg,
                     ret,
                     0
@@ -1288,7 +1288,7 @@ _parse_logic_and_expr(ParseState *state)
         _parse_push_inst(
             state,
             cvm_inst_new_d_type(
-                I_ADD,
+                I_MOV,
                 temp_reg,
                 ret,
                 0
@@ -1323,7 +1323,7 @@ _parse_logic_or_expr(ParseState *state)
             _parse_push_inst(
                 state,
                 cvm_inst_new_d_type(
-                    I_ADD,
+                    I_MOV,
                     temp_reg,
                     ret,
                     0
@@ -1356,7 +1356,7 @@ _parse_logic_or_expr(ParseState *state)
         _parse_push_inst(
             state,
             cvm_inst_new_d_type(
-                I_ADD,
+                I_MOV,
                 temp_reg,
                 ret,
                 0
@@ -1489,7 +1489,7 @@ _parse_assignment_expr(ParseState *state)
         _parse_push_inst(
             state,
             cvm_inst_new_d_type(
-                I_ADD,
+                I_MOV,
                 temp_reg,
                 result_reg,
                 0

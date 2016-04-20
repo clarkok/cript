@@ -33,20 +33,23 @@ inline Value
 cvm_get_register(VMState *vm, unsigned int reg_id)
 { return vm_frame_top(vm)->regs[reg_id]; }
 
+#define _cvm_try_alloc(vm, ret, expr)                                       \
+    do {                                                                    \
+        ret = expr;                                                         \
+        if (!ret) {                                                         \
+            cvm_young_gc(vm);                                               \
+            ret = expr;                                                     \
+            if (!ret) {                                                     \
+                error_f("Out of memory when trying to exec %s", #expr);     \
+            }                                                               \
+        }                                                                   \
+    } while (0)
+
 static inline Hash *
 _cvm_allocate_new_hash(VMState *vm, size_t capacity, int type)
 {
-    Hash *hash = young_gen_new_hash(vm->young_gen, capacity, type);
-    if (!hash) {
-        cvm_young_gc(vm);
-        hash = young_gen_new_hash(vm->young_gen, capacity, type);
-        if (!hash) {
-            error_f("Out of memory when allocating %s of capacity %d",
-                    hash_type_to_str(type),
-                    capacity
-            );
-        }
-    }
+    Hash *hash;
+    _cvm_try_alloc(vm, hash, young_gen_new_hash(vm->young_gen, capacity, type));
     return hash;
 }
 
@@ -224,8 +227,16 @@ cvm_young_gc(VMState *vm)
 Value
 cvm_create_light_function(VMState *vm, light_function func)
 {
-    Hash *ret = _cvm_allocate_new_hash(vm, HASH_MIN_CAPACITY, HT_LIGHTFUNC);
+    Hash *ret = _cvm_allocate_new_hash(vm, 0, HT_LIGHTFUNC);
     ret->hi_func = func;
+    return value_from_ptr(ret);
+}
+
+Value
+cvm_create_userdata(VMState *vm, void *data, userdata_destructor destructor)
+{
+    Hash *ret;
+    _cvm_try_alloc(vm, ret, young_gen_new_userdata(vm->young_gen, data, destructor));
     return value_from_ptr(ret);
 }
 
@@ -329,6 +340,12 @@ cvm_state_run(VMState *vm)
                     value_from_int(
                         !value_to_int(cvm_get_register(vm, inst.i_rs))
                     )
+                );
+                break;
+            case I_MOV:
+                cvm_set_register(
+                    vm, inst.i_rd,
+                    cvm_get_register(vm, inst.i_rs)
                 );
                 break;
             case I_BNR:
