@@ -9,6 +9,9 @@
 #define register_function(vm, func, name)   \
     cvm_register_in_global(vm, cvm_create_light_function(vm, func), name)
 
+#define register_value(vm, value, name)     \
+    cvm_register_in_global(vm, value, name)
+
 static Value
 _lib_print(VMState *vm, Value value)
 {
@@ -199,6 +202,9 @@ _lib_parse_number(VMState *vm, Value value)
 void
 lib_register(VMState *vm)
 {
+    register_value(vm, value_undefined(), "undefined");
+    register_value(vm, value_null(), "null");
+
     register_function(vm, _lib_print, "print");
     register_function(vm, _lib_println, "println");
     register_function(vm, _lib_foreach, "foreach");
