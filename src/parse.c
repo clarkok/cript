@@ -531,6 +531,8 @@ _parse_push_function(ParseState *state)
 {
     FunctionScope *function_scope = _parse_function_scope_new();
     list_prepend(&state->function_stack, &function_scope->_linked);
+
+    _parse_define_into_scope(scope_stack_top(state), string_pool_insert_str(&state->string_pool, "this"), 1);
 }
 
 static inline VMFunction *
