@@ -58,6 +58,8 @@ VMState *cvm_state_new_from_parse_state(ParseState *state);
 VMState *cvm_state_new(InstList *main_inst_list, StringPool *string_pool);
 void cvm_state_destroy(VMState *vm);
 
+Value cvm_state_import_from_parse_state(VMState *vm, ParseState *state);
+
 Value cvm_state_run(VMState *vm);
 Value cvm_state_call_function(VMState *vm, Value func, Value args);
 

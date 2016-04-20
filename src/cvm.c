@@ -9,6 +9,8 @@
 #include "young_gen.h"
 #include "hash_internal.h"
 
+#include "inst_output.h"
+
 #define type_error(vm, expected)            \
     error_f("%s", "TypeError: expected " expected)
 
@@ -183,6 +185,32 @@ cvm_state_new_from_parse_state(ParseState *state)
     cvm_state_push_frame(vm, main_function);
 
     return vm;
+}
+
+Value
+cvm_state_import_from_parse_state(VMState *vm, ParseState *state)
+{
+    vm->string_pool = state->string_pool;   state->string_pool = NULL;
+
+    _cvm_push_scene(vm);
+    while (list_size(&state->functions)) {
+        list_append(&vm->functions, list_unlink(list_head(&state->functions)));
+    }
+    VMFunction *main_function = parse_get_main_function(state);
+    inst_list_push(
+        main_function->inst_list,
+        cvm_inst_new_d_type(
+            I_HALT,
+            0, 0, 0
+        )
+    );
+    list_prepend(&vm->functions, &main_function->_linked);
+
+    cvm_state_push_frame(vm, main_function);
+    Value val = cvm_state_run(vm);
+    _cvm_pop_scene(vm);
+
+    return val;
 }
 
 VMState *

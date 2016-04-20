@@ -73,6 +73,18 @@ static Value
 _lib_random(VMState *vm, Value value)
 { return value_from_int(random()); }
 
+static Value
+_lib_import(VMState *vm, Value value)
+{
+    Hash *args = value_to_ptr(value);
+    CString *path = value_to_string(hash_find(args, 1));
+    ParseState *state = parse_state_expand_from_file(vm, path->content);
+    parse(state);
+    Value ret = cvm_state_import_from_parse_state(vm, state);
+    parse_state_destroy(state);
+    return ret;
+}
+
 void
 lib_register(VMState *vm)
 {
@@ -80,4 +92,5 @@ lib_register(VMState *vm)
     register_function(vm, _lib_println, "println");
     register_function(vm, _lib_foreach, "foreach");
     register_function(vm, _lib_random, "random");
+    register_function(vm, _lib_import, "import");
 }

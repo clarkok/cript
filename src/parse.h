@@ -20,6 +20,7 @@ typedef struct ParseState
     int column;
 
     const char *content;
+    int should_free_content;
     size_t content_length;
 
     StringPool *string_pool;
@@ -36,6 +37,8 @@ typedef struct ParseState
 } ParseState;
 
 ParseState *parse_state_new_from_string(const char *content);
+ParseState *parse_state_new_from_file(const char *path);
+ParseState *parse_state_expand_from_file(VMState *vm, const char *path);
 void parse_state_destroy(ParseState *state);
 
 VMFunction *parse_get_main_function(ParseState *state);

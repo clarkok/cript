@@ -395,15 +395,16 @@ _parse_function_scope_new()
 }
 
 ParseState *
-parse_state_new_from_string(const char *content)
+_parse_state_new(const char *filename, const char *content, int should_free_content)
 {
     ParseState *state = (ParseState*)malloc(sizeof(ParseState));
 
-    state->filename = "<string>";
+    state->filename = filename;
     state->line = 0;
     state->column = 0;
 
     state->content = content;
+    state->should_free_content = should_free_content;
     state->content_length = strlen(content);
 
     state->string_pool = string_pool_new();
@@ -421,6 +422,7 @@ parse_state_new_from_string(const char *content)
     list_prepend(&state->function_stack, &function->_linked);
 
     size_t global_reg = _parse_allocate_register(state);
+    assert(global_reg == 1);
 
     _parse_define_into_scope(
         list_get(list_head(&function->scopes), ParseScope, _linked),
@@ -430,10 +432,53 @@ parse_state_new_from_string(const char *content)
     return state;
 }
 
+ParseState *
+parse_state_new_from_string(const char *content)
+{ return _parse_state_new("<string>", content, 0); }
+
+ParseState *
+parse_state_new_from_file(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        error_f("Cannot open file: %s\n", path);
+        return NULL;
+    }
+    fseek(file, 0, SEEK_END);
+    size_t file_size = (size_t)ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *content = malloc(file_size + 1);
+    fread(content, file_size, 1, file);
+    fclose(file);
+
+    return _parse_state_new(path, content, 1);
+}
+
+ParseState *
+parse_state_expand_from_file(VMState *vm, const char *path)
+{
+    ParseState *state = parse_state_new_from_file(path);
+    string_pool_destroy(state->string_pool);
+    state->string_pool = vm->string_pool;   vm->string_pool = NULL;
+
+    size_t global_reg = function_stack_top(state)->register_nr - 1;
+    assert(global_reg == 1);
+
+    _parse_define_into_scope(
+        list_get(list_head(&function_stack_top(state)->scopes), ParseScope, _linked),
+        string_pool_insert_str(&state->string_pool, "global"),
+        global_reg
+    );
+
+    return state;
+}
+
 void
 parse_state_destroy(ParseState *state)
 {
     if (state->string_pool)     { string_pool_destroy(state->string_pool); }
+    if (state->should_free_content) { free((void*)state->content); }
     while (list_size(&state->function_stack)) {
         FunctionScope *function = list_get(list_unlink(list_head(&state->function_stack)), FunctionScope, _linked);
 
