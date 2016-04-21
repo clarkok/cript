@@ -16,7 +16,7 @@ _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
     list_append(&builder->basic_blocks, &ret->_linked);
     ret->dominator = dominator;
     ret->inst_list = inst_list_new(16);
-    ret->entry_point = value_null();
+    ret->entry_point = value_from_ptr((void*)(0xFFFFFFFFu << 2));
     ret->br_reg = 0;
     ret->then_bb = NULL;
     ret->else_bb = NULL;
@@ -74,7 +74,24 @@ _ir_builder_bnr_else(InstList **inst_list, BasicBlock *bb, BasicBlock *dst)
 static inline void
 _ir_builder_jump_to(InstList **inst_list, BasicBlock *bb, BasicBlock *dst)
 {
-    if (dst != list_get(list_next(&bb->_linked), BasicBlock, _linked)) {
+    if (!dst) {
+        // cannot allocate new register here
+        inst_list_push(
+            *inst_list,
+            cvm_inst_new_d_type(
+                I_UNDEFINED,
+                1, 0, 0
+            )
+        );
+        inst_list_push(
+            *inst_list,
+            cvm_inst_new_d_type(
+                I_RET,
+                1, 0, 0
+            )
+        );
+    }
+    else if (!list_next(&bb->_linked) || dst != list_get(list_next(&bb->_linked), BasicBlock, _linked)) {
         if (value_is_ptr(dst->entry_point)) {
             size_t j_index = (*inst_list)->count;
             inst_list_push(
@@ -143,7 +160,7 @@ ir_builder_destroy(IRBuilder *builder)
     }
 
     while (list_size(&builder->basic_blocks)) {
-        BasicBlock *bb = 
+        BasicBlock *bb =
             list_get(list_unlink(list_head(&builder->basic_blocks)), BasicBlock, _linked);
 
         inst_list_destroy(bb->inst_list);
@@ -391,6 +408,22 @@ ir_builder_mov(BasicBlock *bb, size_t rs)
     return ret;
 }
 
+void
+ir_builder_mov_upper(BasicBlock *bb, size_t rd, size_t rs)
+{
+    assert_basic_block_not_end(bb);
+
+    inst_list_push(
+        bb->inst_list,
+        cvm_inst_new_d_type(
+            I_MOV,
+            rd,
+            rs,
+            0
+        )
+    );
+}
+
 size_t
 ir_builder_new_obj(BasicBlock *bb)
 {
@@ -401,7 +434,7 @@ ir_builder_new_obj(BasicBlock *bb)
         bb->inst_list,
         cvm_inst_new_d_type(
             I_NEW_OBJ,
-            0, 0, 0
+            ret, 0, 0
         )
     );
     return ret;
@@ -417,7 +450,7 @@ ir_builder_new_arr(BasicBlock *bb)
         bb->inst_list,
         cvm_inst_new_d_type(
             I_NEW_ARR,
-            0, 0, 0
+            ret, 0, 0
         )
     );
     return ret;
@@ -539,4 +572,18 @@ ir_builder_null(BasicBlock *bb)
         )
     );
     return ret;
+}
+
+void
+ir_builder_halt(BasicBlock *bb)
+{
+    assert_basic_block_not_end(bb);
+
+    inst_list_push(
+        bb->inst_list,
+        cvm_inst_new_d_type(
+            I_HALT,
+            0, 0, 0
+        )
+    );
 }

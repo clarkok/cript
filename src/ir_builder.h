@@ -51,14 +51,16 @@ size_t ir_builder_slt(BasicBlock *bb, size_t rs, size_t rt);
 size_t ir_builder_sle(BasicBlock *bb, size_t rs, size_t rt);
 size_t ir_builder_lnot(BasicBlock *bb, size_t rs);
 size_t ir_builder_mov(BasicBlock *bb, size_t rs);
+void ir_builder_mov_upper(BasicBlock *bb, size_t rd, size_t rs);
 size_t ir_builder_new_obj(BasicBlock *bb);
 size_t ir_builder_new_arr(BasicBlock *bb);
 void ir_builder_set_obj(BasicBlock *bb, size_t r_obj, size_t r_val, size_t r_key);
 size_t ir_builder_get_obj(BasicBlock *bb, size_t r_obj, size_t r_key);
 size_t ir_builder_call(BasicBlock *bb, size_t r_func, size_t r_reg);
 void ir_builder_ret(BasicBlock *bb, size_t r_val);
-size_t ir_build_new_cls(BasicBlock *bb, VMFunction *func);
-size_t ir_build_undefined(BasicBlock *bb);
-size_t ir_build_null(BasicBlock *bb);
+size_t ir_builder_new_cls(BasicBlock *bb, VMFunction *func);
+size_t ir_builder_undefined(BasicBlock *bb);
+size_t ir_builder_null(BasicBlock *bb);
+void ir_builder_halt(BasicBlock *bb);
 
 #endif

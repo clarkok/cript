@@ -6,6 +6,7 @@
 #define CRIPT_PARSE_INTERNAL_H
 
 #include "list.h"
+#include "ir_builder.h"
 
 enum Token
 {
@@ -36,6 +37,7 @@ enum ReservedWord
     R_WHILE,
     R_FUNCTION,
     R_RETURN,
+    R_HALT,
 
     RESERVED_WORD_NR
 };
@@ -54,9 +56,9 @@ typedef struct FunctionScope
 
     LinkedList scopes;
     size_t arguments_nr;
-    size_t register_nr;
     Hash *capture_list;
-    InstList *inst_list;
+    IRBuilder *builder;
+    BasicBlock *current_bb;
 } FunctionScope;
 
 int _lex_peak(ParseState *state);
@@ -67,7 +69,7 @@ int _lex_next(ParseState *state);
 
 static inline size_t
 _parse_allocate_reg_for_func(FunctionScope *func_scope)
-{ return func_scope->register_nr++; }
+{ return ir_builder_allocate_register(func_scope->builder); }
 
 static inline Value
 _parse_capture_variable(ParseState *state, ParseScope *scope, CString *string)

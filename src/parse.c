@@ -67,19 +67,6 @@
                 break;                                                              \
         }
 
-#define _parse_push_inst(state, inst)                                               \
-    do {                                                                            \
-        FunctionScope *function = function_stack_top(state);                        \
-        inst_list_push(function->inst_list, inst);                                  \
-    } while (0)
-
-#define _parse_current_inst_list(state)                                             \
-    function_stack_top(state)->inst_list
-
-#define _parse_inst_list_size(state)                                                \
-    _parse_current_inst_list(state)->count
-
-
 void
 _lex_parse_number(ParseState *state)
 {
@@ -380,9 +367,9 @@ _parse_function_scope_new()
     list_node_init(&ret->_linked);
     list_init(&ret->scopes);
     ret->arguments_nr = 0;
-    ret->register_nr = 1;
     ret->capture_list = hash_new(HASH_MIN_CAPACITY);
-    ret->inst_list = inst_list_new(16);
+    ret->builder = ir_builder_new(0);
+    ret->current_bb = ir_builder_entry(ret->builder);
 
     ParseScope *scope = malloc(sizeof(ParseScope));
     scope->symbol_table = hash_new(HASH_MIN_CAPACITY);
@@ -462,7 +449,7 @@ parse_state_expand_from_file(VMState *vm, const char *path)
     string_pool_destroy(state->string_pool);
     state->string_pool = vm->string_pool;   vm->string_pool = NULL;
 
-    size_t global_reg = function_stack_top(state)->register_nr - 1;
+    size_t global_reg = function_stack_top(state)->builder->register_nr - 1;
     assert(global_reg == 1);
 
     _parse_define_into_scope(
@@ -489,7 +476,9 @@ parse_state_destroy(ParseState *state)
         }
 
         hash_destroy(function->capture_list);
-        inst_list_destroy(function->inst_list);
+        if (function->builder) {
+            ir_builder_destroy(function->builder);
+        }
         free(function);
     }
     free(state);
@@ -508,19 +497,35 @@ void
 _parse_join_scope(ParseState *state)
 {
     ParseScope *scope = scope_stack_top(state);
-    list_unlink(list_head(&function_stack_top(state)->scopes));
+    list_unlink(&scope->_linked);
 
     hash_for_each(scope->upper_table, node) {
-        _parse_push_inst(state,
-                       cvm_inst_new_d_type(
-                           I_MOV,
-                           (size_t)_parse_find_in_symbol_table(state, node->key),
-                           (size_t)value_to_int(node->value),
-                           0
-                       )
-        );
+        if (_parse_find_define_scope(state, (CString*)node->key) == scope_stack_top(state)) {
+            _parse_define_into_scope(
+                scope_stack_top(state),
+                (CString*)node->key,
+                (size_t)value_to_int(node->value)
+            );
+        }
+        else {
+            _parse_insert_into_scope(
+                scope_stack_top(state),
+                (CString*)node->key,
+                (size_t)value_to_int(node->value)
+            );
+        }
     }
 
+    hash_destroy(scope->upper_table);
+    hash_destroy(scope->symbol_table);
+    free(scope);
+}
+
+void
+_parse_pop_scope(ParseState *state)
+{
+    ParseScope *scope = scope_stack_top(state);
+    list_unlink(&scope->_linked);
     hash_destroy(scope->upper_table);
     hash_destroy(scope->symbol_table);
     free(scope);
@@ -543,9 +548,11 @@ _parse_pop_function(ParseState *state)
 
     list_node_init(&function->_linked);
     function->arguments_nr = func_scope->arguments_nr;
-    function->register_nr = func_scope->register_nr;
+    function->register_nr = func_scope->builder->register_nr + 1;
     function->capture_list = func_scope->capture_list;
-    function->inst_list = func_scope->inst_list;
+    function->inst_list = ir_builder_destroy(func_scope->builder);
+    func_scope->builder = NULL;
+    func_scope->current_bb = NULL;
 
     assert(list_size(&func_scope->scopes) == 1);
     ParseScope *scope = list_get(list_head(&func_scope->scopes), ParseScope, _linked);
@@ -574,6 +581,7 @@ _parse_inject_reserved(ParseState *state, CString *reserved[])
     inject_reserved(R_WHILE, "while");
     inject_reserved(R_FUNCTION, "function");
     inject_reserved(R_RETURN, "return");
+    inject_reserved(R_HALT, "halt");
 
 #undef inject_reserved
 }
@@ -586,15 +594,7 @@ _parse_object_literal(ParseState *state)
     int tok = _lex_next(state);
     assert(tok == '{');
 
-    size_t ret = _parse_allocate_register(state);
-    _parse_push_inst(
-        state,
-        cvm_inst_new_d_type(
-            I_NEW_OBJ,
-            ret,
-            0, 0
-        )
-    );
+    size_t ret = ir_builder_new_obj(function_stack_top(state)->current_bb);
 
     tok = _lex_peak(state);
     if (tok == TOK_EOF) {
@@ -603,7 +603,6 @@ _parse_object_literal(ParseState *state)
     }
 
     if (tok != '}') {
-        size_t key_reg = _parse_allocate_register(state);
         while (1) {
             tok = _lex_next(state);
             if (tok != TOK_ID && tok != TOK_STRING) {
@@ -619,25 +618,8 @@ _parse_object_literal(ParseState *state)
             }
 
             size_t value_reg = _parse_right_hand_expr(state);
-
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_LSTR,
-                    key_reg,
-                    (intptr_t)string
-                )
-            );
-
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_SET_OBJ,
-                    ret,
-                    value_reg,
-                    key_reg
-                )
-            );
+            size_t key_reg = ir_builder_lstr(function_stack_top(state)->current_bb, string);
+            ir_builder_set_obj(function_stack_top(state)->current_bb, ret, value_reg, key_reg);
 
             tok = _lex_peak(state);
             if (tok == TOK_EOF) {
@@ -667,15 +649,7 @@ _parse_array_literal(ParseState *state)
     int tok = _lex_next(state);
     assert(tok == '[');
 
-    size_t ret = _parse_allocate_register(state);
-    _parse_push_inst(
-        state, 
-        cvm_inst_new_d_type(
-            I_NEW_ARR,
-            ret,
-            0, 0
-        )
-    );
+    size_t ret = ir_builder_new_arr(function_stack_top(state)->current_bb);
 
     tok = _lex_peak(state);
     if (tok == TOK_EOF) {
@@ -684,25 +658,8 @@ _parse_array_literal(ParseState *state)
     }
 
     if (tok != ']') {
-        size_t one_reg = _parse_allocate_register(state);
-        _parse_push_inst(
-            state,
-            cvm_inst_new_i_type(
-                I_LI,
-                one_reg,
-                1
-            )
-        );
-
-        size_t key_reg = _parse_allocate_register(state);
-        _parse_push_inst(
-            state,
-            cvm_inst_new_i_type(
-                I_LI,
-                key_reg,
-                0
-            )
-        );
+        size_t one_reg = ir_builder_li(function_stack_top(state)->current_bb, 1);
+        size_t key_reg = ir_builder_li(function_stack_top(state)->current_bb, 0);
 
         while (1) {
             size_t value_reg = _parse_right_hand_expr(state);
@@ -710,39 +667,13 @@ _parse_array_literal(ParseState *state)
 
             if (tok == ':') {
                 _lex_next(state);
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_MOV,
-                        key_reg,
-                        value_reg,
-                        0
-                    )
-                );
-
+                key_reg = ir_builder_mov(function_stack_top(state)->current_bb, value_reg);
                 value_reg = _parse_right_hand_expr(state);
                 tok = _lex_peak(state);
             }
 
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_SET_OBJ,
-                    ret,
-                    value_reg,
-                    key_reg
-                )
-            );
-
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_ADD,
-                    key_reg,
-                    key_reg,
-                    one_reg
-                )
-            );
+            ir_builder_set_obj(function_stack_top(state)->current_bb, ret, value_reg, key_reg);
+            key_reg = ir_builder_add(function_stack_top(state)->current_bb, key_reg, one_reg);
 
             if (tok == TOK_EOF) {
                 parse_error(state, "%s", "unexpected EOF");
@@ -842,38 +773,14 @@ _parse_function_literal(ParseState *state)
     assert(tok == '}');
     _lex_next(state);
 
-    size_t ret_reg = _parse_allocate_register(state);
-    _parse_push_inst(
-        state,
-        cvm_inst_new_i_type(
-            I_UNDEFINED,
-            ret_reg,
-            0
-        )
-    );
-
-    _parse_push_inst(
-        state,
-        cvm_inst_new_i_type(
-            I_RET,
-            ret_reg,
-            0
-        )
+    ir_builder_ret(
+        function_stack_top(state)->current_bb,
+        ir_builder_undefined(function_stack_top(state)->current_bb)
     );
 
     VMFunction *func = _parse_pop_function(state);
 
-    size_t ret = _parse_allocate_register(state);
-    _parse_push_inst(
-        state,
-        cvm_inst_new_i_type(
-            I_NEW_CLS,
-            ret,
-            (size_t)func
-        )
-    );
-
-    return ret;
+    return ir_builder_new_cls(function_stack_top(state)->current_bb, func);
 }
 
 size_t
@@ -892,27 +799,11 @@ _parse_unary_expr(ParseState *state)
             }
             break;
         case TOK_NUM:
-            ret = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_LI,
-                    ret,
-                    state->peaking_value
-                )
-            );
+            ret = ir_builder_li(function_stack_top(state)->current_bb, state->peaking_value);
             _lex_next(state);
             break;
         case TOK_STRING:
-            ret = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_LSTR,
-                    ret,
-                    state->peaking_value
-                )
-            );
+            ret = ir_builder_lstr(function_stack_top(state)->current_bb, (CString*)state->peaking_value);
             _lex_next(state);
             break;
         case TOK_ID:
@@ -964,69 +855,31 @@ _parse_arguments(ParseState *state, size_t this_reg)
     int tok = _lex_next(state);
     assert(tok == '(');
 
-    size_t arg_reg = _parse_allocate_register(state);
-    size_t key_reg = _parse_allocate_register(state);
-    size_t one_reg = _parse_allocate_register(state);
+    size_t arg_reg = ir_builder_new_arr(function_stack_top(state)->current_bb);
+    size_t one_reg = ir_builder_li(function_stack_top(state)->current_bb, 1);
+    size_t key_reg = ir_builder_li(function_stack_top(state)->current_bb, 0);
 
-    _parse_push_inst(
-        state,
-        cvm_inst_new_d_type(
-            I_NEW_ARR,
-            arg_reg,
-            0, 0
-        )
-    );
-
-    _parse_push_inst(
-        state,
-        cvm_inst_new_i_type(
-            I_LI,
-            one_reg,
-            1
-        )
-    );
-
-    _parse_push_inst(
-        state,
-        cvm_inst_new_i_type(
-            I_LI,
-            key_reg,
-            0
-        )
-    );
-
-    _parse_push_inst(
-        state,
-        cvm_inst_new_d_type(
-            I_SET_OBJ,
-            arg_reg,
-            this_reg,
-            key_reg
-        )
+    ir_builder_set_obj(
+        function_stack_top(state)->current_bb,
+        arg_reg,
+        this_reg,
+        key_reg
     );
 
     tok = _lex_peak(state);
     while (tok != TOK_EOF && tok != ')') {
         size_t result_reg = _parse_right_hand_expr(state);
-
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_ADD,
-                key_reg,
-                key_reg,
-                one_reg
-            )
+        key_reg = ir_builder_add(
+            function_stack_top(state)->current_bb,
+            key_reg,
+            one_reg
         );
 
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_SET_OBJ,
-                arg_reg,
-                result_reg,
-                key_reg
-            )
+        ir_builder_set_obj(
+            function_stack_top(state)->current_bb,
+            arg_reg,
+            result_reg,
+            key_reg
         );
 
         tok = _lex_peak(state);
@@ -1050,7 +903,10 @@ size_t
 _parse_postfix_expr(ParseState *state)
 {
     size_t ret = _parse_unary_expr(state);
-    size_t this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
+    size_t this_reg = (size_t)_parse_find_in_symbol_table(
+        state,
+        string_pool_find_str(state->string_pool, "global")
+    );
 
     int tok = _lex_peak(state);
     while (tok == '.' || tok == '[' || tok == '(') {
@@ -1062,25 +918,15 @@ _parse_postfix_expr(ParseState *state)
                 return 0;
             }
 
-            size_t key_reg = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_LSTR,
-                    key_reg,
-                    state->peaking_value
-                )
+            size_t key_reg = ir_builder_lstr(
+                function_stack_top(state)->current_bb,
+                (CString*)state->peaking_value
             );
 
-            size_t temp_reg = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_GET_OBJ,
-                    temp_reg,
-                    ret,
-                    key_reg
-                )
+            size_t temp_reg = ir_builder_get_obj(
+                function_stack_top(state)->current_bb,
+                ret,
+                key_reg
             );
 
             this_reg = ret;
@@ -1089,15 +935,10 @@ _parse_postfix_expr(ParseState *state)
         else if (tok == '[') {
             _lex_next(state);
             size_t key_reg = _parse_right_hand_expr(state);
-            size_t temp_reg = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_GET_OBJ,
-                    temp_reg,
-                    ret,
-                    key_reg
-                )
+            size_t temp_reg = ir_builder_get_obj(
+                function_stack_top(state)->current_bb,
+                ret,
+                key_reg
             );
             tok = _lex_next(state);
             if (tok != ']') {
@@ -1111,19 +952,15 @@ _parse_postfix_expr(ParseState *state)
         else {
             size_t func_reg = ret;
             size_t arg_reg = _parse_arguments(state, this_reg);
-
-            size_t temp_reg = _parse_allocate_register(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_CALL,
-                    temp_reg,
-                    func_reg,
-                    arg_reg
-                )
+            size_t temp_reg = ir_builder_call(
+                function_stack_top(state)->current_bb,
+                func_reg,
+                arg_reg
             );
-
-            this_reg = _parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
+            this_reg = (size_t)_parse_find_in_symbol_table(
+                state,
+                string_pool_find_str(state->string_pool, "global")
+            );
             ret = temp_reg;
         }
 
@@ -1142,20 +979,10 @@ _parse_mul_expr(ParseState *state)
     while (tok == '*' || tok == '/' || tok == '%') {
         _lex_next(state);
         size_t b_reg = _parse_postfix_expr(state);
-        size_t temp_reg = _parse_allocate_register(state);
-
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                tok == '*' ? I_MUL :
-                tok == '/' ? I_DIV :
-                             I_MOD,
-                temp_reg,
-                ret,
-                b_reg
-            )
-        );
-
+        size_t temp_reg =
+            tok == '*' ? ir_builder_mul(function_stack_top(state)->current_bb, ret, b_reg) :
+            tok == '/' ? ir_builder_div(function_stack_top(state)->current_bb, ret, b_reg) :
+                         ir_builder_mod(function_stack_top(state)->current_bb, ret, b_reg);
         ret = temp_reg;
         tok = _lex_peak(state);
     }
@@ -1172,18 +999,9 @@ _parse_add_expr(ParseState *state)
     while (tok == '+' || tok == '-') {
         _lex_next(state);
         size_t b_reg = _parse_mul_expr(state);
-        size_t temp_reg = _parse_allocate_register(state);
-
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                tok == '+' ? I_ADD : I_SUB,
-                temp_reg,
-                ret,
-                b_reg
-            )
-        );
-
+        size_t temp_reg =
+            tok == '+' ? ir_builder_add(function_stack_top(state)->current_bb, ret, b_reg) :
+                         ir_builder_sub(function_stack_top(state)->current_bb, ret, b_reg);
         ret = temp_reg;
         tok = _lex_peak(state);
     }
@@ -1207,82 +1025,27 @@ _parse_compare_expr(ParseState *state)
     ) {
         _lex_next(state);
         size_t b_reg = _parse_add_expr(state);
-        size_t temp_reg = _parse_allocate_register(state);
-
+        size_t temp_reg;
         switch (tok) {
             case '<':
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SLT,
-                        temp_reg,
-                        ret,
-                        b_reg
-                    )
-                );
+                temp_reg = ir_builder_slt(function_stack_top(state)->current_bb, ret, b_reg);
                 break;
             case '>':
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SLT,
-                        temp_reg,
-                        b_reg,
-                        ret
-                    )
-                );
+                temp_reg = ir_builder_slt(function_stack_top(state)->current_bb, b_reg, ret);
                 break;
             case TOK_LE:
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SLE,
-                        temp_reg,
-                        ret,
-                        b_reg
-                    )
-                );
+                temp_reg = ir_builder_sle(function_stack_top(state)->current_bb, ret, b_reg);
                 break;
             case TOK_GE:
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SLE,
-                        temp_reg,
-                        b_reg,
-                        ret
-                    )
-                );
+                temp_reg = ir_builder_sle(function_stack_top(state)->current_bb, b_reg, ret);
                 break;
             case TOK_EQ:
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SEQ,
-                        temp_reg,
-                        b_reg,
-                        ret
-                    )
-                );
+                temp_reg = ir_builder_seq(function_stack_top(state)->current_bb, ret, b_reg);
                 break;
             case TOK_NE:
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_SEQ,
-                        temp_reg,
-                        b_reg,
-                        ret
-                    )
-                );
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_LNOT,
-                        temp_reg,
-                        temp_reg,
-                        0
-                    )
+                temp_reg = ir_builder_lnot(
+                    function_stack_top(state)->current_bb,
+                    ir_builder_seq(function_stack_top(state)->current_bb, ret, b_reg)
                 );
                 break;
             default:
@@ -1303,52 +1066,46 @@ _parse_logic_and_expr(ParseState *state)
     int tok = _lex_peak(state);
     if (tok == TOK_AND) {
         size_t temp_reg = _parse_allocate_register(state);
-        size_t last_index = 0;
-        size_t current_index = 0;
+
+        BasicBlock *expr_end = ir_builder_new_basic_block(
+            function_stack_top(state)->builder,
+            function_stack_top(state)->current_bb
+        );
 
         while (tok == TOK_AND) {
             _lex_next(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_MOV,
-                    temp_reg,
-                    ret,
-                    0
-                )
+            ir_builder_mov_upper(
+                function_stack_top(state)->current_bb,
+                temp_reg,
+                ret
             );
-            current_index = _parse_inst_list_size(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_BNR,
-                    ret,
-                    last_index
-                )
+            BasicBlock *next_block = ir_builder_new_basic_block(
+                function_stack_top(state)->builder,
+                function_stack_top(state)->current_bb
             );
-            last_index = current_index;
+            ir_builder_br(
+                function_stack_top(state)->current_bb,
+                temp_reg,
+                next_block,
+                expr_end
+            );
 
+            function_stack_top(state)->current_bb = next_block;
             ret = _parse_compare_expr(state);
             tok = _lex_peak(state);
         }
 
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_MOV,
-                temp_reg,
-                ret,
-                0
-            )
+        ir_builder_mov_upper(
+            function_stack_top(state)->current_bb,
+            temp_reg,
+            ret
+        );
+        ir_builder_j(
+            function_stack_top(state)->current_bb,
+            expr_end
         );
 
-        while (last_index) {
-            current_index = last_index;
-            last_index = (size_t)_parse_current_inst_list(state)->insts[current_index].i_imm;
-            _parse_current_inst_list(state)->insts[current_index].i_imm =
-                _parse_current_inst_list(state)->count - current_index - 1;
-        }
-
+        function_stack_top(state)->current_bb = expr_end;
         ret = temp_reg;
     }
     return ret;
@@ -1362,100 +1119,78 @@ _parse_logic_or_expr(ParseState *state)
     int tok = _lex_peak(state);
     if (tok == TOK_OR) {
         size_t temp_reg = _parse_allocate_register(state);
-        size_t last_index = 0;
-        size_t current_index = 0;
+
+        BasicBlock *expr_end = ir_builder_new_basic_block(
+            function_stack_top(state)->builder,
+            function_stack_top(state)->current_bb
+        );
 
         while (tok == TOK_OR) {
             _lex_next(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_MOV,
-                    temp_reg,
-                    ret,
-                    0
-                )
+            ir_builder_mov_upper(
+                function_stack_top(state)->current_bb,
+                temp_reg,
+                ret
             );
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_LNOT,
-                    ret,
-                    ret,
-                    0
-                )
+            BasicBlock *next_block = ir_builder_new_basic_block(
+                function_stack_top(state)->builder,
+                function_stack_top(state)->current_bb
             );
-            current_index = _parse_inst_list_size(state);
-            _parse_push_inst(
-                state,
-                cvm_inst_new_i_type(
-                    I_BNR,
-                    ret,
-                    last_index
-                )
+            ir_builder_br(
+                function_stack_top(state)->current_bb,
+                temp_reg,
+                expr_end,
+                next_block
             );
-            last_index = current_index;
+            function_stack_top(state)->current_bb = next_block;
 
             ret = _parse_compare_expr(state);
             tok = _lex_peak(state);
         }
 
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_MOV,
-                temp_reg,
-                ret,
-                0
-            )
+        ir_builder_mov_upper(
+            function_stack_top(state)->current_bb,
+            temp_reg,
+            ret
+        );
+        ir_builder_j(
+            function_stack_top(state)->current_bb,
+            expr_end
         );
 
-        while (last_index) {
-            current_index = last_index;
-            last_index = (size_t)_parse_current_inst_list(state)->insts[current_index].i_imm;
-            _parse_current_inst_list(state)->insts[current_index].i_imm =
-                _parse_current_inst_list(state)->count - current_index - 1;
-        }
-
+        function_stack_top(state)->current_bb = expr_end;
         ret = temp_reg;
     }
     return ret;
 }
 
 size_t
-_parse_conditional_expr(ParseState *state)
-{
-    return _parse_logic_or_expr(state);
-}
-
-size_t
 _parse_right_hand_expr(ParseState *state)
-{ return _parse_conditional_expr(state); }
+{ return _parse_logic_or_expr(state); }
 
 void
 _parse_assignment_expr(ParseState *state)
 {
-    size_t object_reg = _parse_unary_expr(state);
+    int tok = _lex_next(state);
+    if (
+        tok != TOK_ID ||
+        !_parse_exists_in_symbol_table(state, state->peaking_value) ||
+        _parse_find_in_symbol_table(state, state->peaking_value) < 0
+    ) {
+        parse_expect_error(state, "identifier", tok);
+        return;
+    }
+
+    CString *literal = (CString*)state->peaking_value;
+    size_t object_reg = (size_t)_parse_find_in_symbol_table(state, state->peaking_value);
     size_t this_reg = (size_t)_parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
     size_t key_reg = 0;
-    int tok = _lex_peak(state);
-    CString *literal = (CString*)state->peaking_value;
+    tok = _lex_peak(state);
 
     while (tok == '.' || tok == '[' || tok == '(') {
         if (tok == '(') {
             size_t arg_reg = _parse_arguments(state, this_reg);
-            size_t temp_reg = _parse_allocate_register(state);
-
-            _parse_push_inst(
-                state,
-                cvm_inst_new_d_type(
-                    I_CALL,
-                    temp_reg,
-                    object_reg,
-                    arg_reg
-                )
-            );
-
+            size_t temp_reg = ir_builder_call(function_stack_top(state)->current_bb, object_reg, arg_reg);
             object_reg = temp_reg;
             this_reg = (size_t)_parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
             key_reg = 0;
@@ -1472,15 +1207,7 @@ _parse_assignment_expr(ParseState *state)
                 }
 
                 CString *string = (CString*)state->peaking_value;
-                key_reg = _parse_allocate_register(state);
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_i_type(
-                        I_LSTR,
-                        key_reg,
-                        (intptr_t)string
-                    )
-                );
+                key_reg = ir_builder_lstr(function_stack_top(state)->current_bb, string);
             }
             else {
                 _lex_next(state);
@@ -1497,15 +1224,10 @@ _parse_assignment_expr(ParseState *state)
                 break;
             }
             else {
-                size_t temp_reg = _parse_allocate_register(state);
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_GET_OBJ,
-                        temp_reg,
-                        object_reg,
-                        key_reg
-                    )
+                size_t temp_reg = ir_builder_get_obj(
+                    function_stack_top(state)->current_bb,
+                    object_reg,
+                    key_reg
                 );
                 key_reg = 0;
                 this_reg = object_reg;
@@ -1528,35 +1250,22 @@ _parse_assignment_expr(ParseState *state)
         _lex_next(state);
     }
 
-    size_t reg_count = function_stack_top(state)->register_nr;
+    size_t current_reg = function_stack_top(state)->builder->register_nr;
     size_t result_reg = _parse_right_hand_expr(state);
 
-    if (function_stack_top(state)->register_nr == reg_count) {
-        size_t temp_reg = _parse_allocate_register(state);
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_MOV,
-                temp_reg,
-                result_reg,
-                0
-            )
-        );
-        result_reg = temp_reg;
-    }
-
     if (key_reg) {
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_SET_OBJ,
-                object_reg,
-                result_reg,
-                key_reg
-            )
+        ir_builder_set_obj(
+            function_stack_top(state)->current_bb,
+            object_reg,
+            result_reg,
+            key_reg
         );
     }
     else {
+        if (current_reg == function_stack_top(state)->builder->register_nr) {
+            result_reg = ir_builder_mov(function_stack_top(state)->current_bb, result_reg);
+        }
+
         if (_parse_find_define_scope(state, literal) == scope_stack_top(state)) {
             _parse_define_into_scope(scope_stack_top(state), literal, result_reg);
         }
@@ -1591,20 +1300,10 @@ _parse_let_stmt(ParseState *state)
 
         if (_lex_peak(state) == '=') {
             _lex_next(state);
-            size_t reg_count = function_stack_top(state)->register_nr;
+            size_t current_reg = function_stack_top(state)->builder->register_nr;
             size_t new_reg = _parse_right_hand_expr(state);
-            if (function_stack_top(state)->register_nr == reg_count) {
-                size_t temp_reg = _parse_allocate_register(state);
-                _parse_push_inst(
-                    state,
-                    cvm_inst_new_d_type(
-                        I_MOV,
-                        temp_reg,
-                        new_reg,
-                        0
-                    )
-                );
-                new_reg = temp_reg;
+            if (current_reg == function_stack_top(state)->builder->register_nr) {
+                new_reg = ir_builder_mov(function_stack_top(state)->current_bb, new_reg);
             }
             _parse_define_into_scope(scope_stack_top(state), literal, new_reg);
         }
@@ -1637,11 +1336,9 @@ _parse_block_stmt(ParseState *state)
     assert(tok == '{');
 
     _parse_push_scope(state);
-
     while (_lex_peak(state) != TOK_EOF && _lex_peak(state) != '}') {
         _parse_statement(state);
     }
-
     _parse_join_scope(state);
 
     if (_lex_next(state) == TOK_EOF) {
@@ -1668,32 +1365,121 @@ _parse_if_else_stmt(ParseState *state)
         return;
     }
 
-    size_t bnr_index = _parse_inst_list_size(state);
-    _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
+    BasicBlock *if_start = function_stack_top(state)->current_bb;
 
+    BasicBlock *then_start_bb = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        if_start
+    );
+
+    Hash *newer = hash_new(HASH_MIN_CAPACITY);
+    Hash *original = hash_new(HASH_MIN_CAPACITY);
+
+    function_stack_top(state)->current_bb = then_start_bb;
     _parse_push_scope(state);
     _parse_statement(state);
+    BasicBlock *then_bb = function_stack_top(state)->current_bb;
+
+    ParseScope *then_scope = scope_stack_top(state);
+    list_unlink(&then_scope->_linked);
+    hash_for_each(then_scope->upper_table, node) {
+        hash_set_and_update(
+            original,
+            node->key,
+            value_from_int(_parse_find_in_symbol_table(state, node->key))
+        );
+        hash_set_and_update(
+            newer,
+            node->key,
+            node->value
+        );
+    }
+    list_prepend(&function_stack_top(state)->scopes, &then_scope->_linked);
     _parse_join_scope(state);
+
+    BasicBlock *else_start_bb = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        if_start
+    );
+
+    ir_builder_br(
+        if_start,
+        reg,
+        then_start_bb,
+        else_start_bb
+    );
 
     tok = _lex_peak(state);
     if (tok == TOK_ID && _parse_find_in_symbol_table(state, state->peaking_value) == -R_ELSE) {
         _lex_next(state);
-        size_t j_index = _parse_inst_list_size(state);
-        _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, 0));
-
-        _parse_current_inst_list(state)->insts[bnr_index].i_imm =
-            _parse_inst_list_size(state) - bnr_index - 1;
+        function_stack_top(state)->current_bb = else_start_bb;
         _parse_push_scope(state);
         _parse_statement(state);
-        _parse_join_scope(state);
+        BasicBlock *else_bb = function_stack_top(state)->current_bb;
 
-        _parse_current_inst_list(state)->insts[j_index].i_imm =
-            _parse_inst_list_size(state);
+        ParseScope *else_scope = scope_stack_top(state);    list_unlink(&else_scope->_linked);
+        ParseScope *base_scope = scope_stack_top(state);
+        hash_for_each(else_scope->upper_table, node) {
+            Value then = hash_find(newer, node->key);
+            if (value_is_undefined(then)) {
+                ir_builder_mov_upper(
+                    then_bb,
+                    (size_t)value_to_int(node->value),
+                    (size_t)_parse_find_in_symbol_table(state, node->key)
+                );
+                _parse_insert_into_scope(
+                    base_scope,
+                    (CString*)node->key,
+                    (size_t)value_to_int(node->value)
+                );
+            }
+            else {
+                ir_builder_mov_upper(
+                    else_bb,
+                    (size_t)value_to_int(then),
+                    (size_t)value_to_int(node->value)
+                );
+                hash_set(newer, node->key, value_undefined());
+            }
+        }
+
+        hash_for_each(newer, node) {
+            ir_builder_mov_upper(
+                else_bb,
+                (size_t)value_to_int(node->value),
+                (size_t)_parse_find_in_symbol_table(state, node->key)
+            );
+        }
+
+        list_prepend(&function_stack_top(state)->scopes, &else_scope->_linked);
+        _parse_pop_scope(state);
+        else_start_bb = else_bb;
     }
     else {
-        _parse_current_inst_list(state)->insts[bnr_index].i_imm =
-            _parse_inst_list_size(state) - bnr_index - 1;
+        hash_for_each(newer, node) {
+            size_t inner = (size_t)value_to_int(node->value),
+                   outer = (size_t)value_to_int(hash_find(original, node->key));
+            if (inner != outer) {
+                ir_builder_mov_upper(
+                    else_start_bb,
+                    inner,
+                    outer
+                );
+            }
+        }
     }
+
+    BasicBlock *if_end = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        if_start
+    );
+
+    hash_destroy(newer);
+    hash_destroy(original);
+
+    ir_builder_j(then_bb, if_end);
+    ir_builder_j(else_start_bb, if_end);
+    function_stack_top(state)->current_bb = if_end;
 }
 
 void
@@ -1703,7 +1489,13 @@ _parse_while_stmt(ParseState *state)
     assert(tok == TOK_ID);
     assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_WHILE);
 
-    size_t while_begin = _parse_inst_list_size(state);
+    BasicBlock *while_cond_start = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        function_stack_top(state)->current_bb
+    );
+
+    ir_builder_j(function_stack_top(state)->current_bb, while_cond_start);
+    function_stack_top(state)->current_bb = while_cond_start;
 
     tok = _lex_next(state);
     if (tok != '(') {
@@ -1717,16 +1509,58 @@ _parse_while_stmt(ParseState *state)
         return;
     }
 
-    size_t bnr_index = _parse_inst_list_size(state);
-    _parse_push_inst(state, cvm_inst_new_i_type(I_BNR, reg, 0));
+    BasicBlock *while_cond_end = function_stack_top(state)->current_bb;
+
+    BasicBlock *while_body_start = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        while_cond_end
+    );
+
+    function_stack_top(state)->current_bb = while_body_start;
 
     _parse_push_scope(state);
     _parse_statement(state);
-    _parse_join_scope(state);
-    _parse_push_inst(state, cvm_inst_new_i_type(I_J, 0, while_begin));
+    BasicBlock *while_body_end = function_stack_top(state)->current_bb;
 
-    _parse_current_inst_list(state)->insts[bnr_index].i_imm =
-        _parse_inst_list_size(state) - bnr_index - 1;
+    Hash *newer = hash_new(HASH_MIN_CAPACITY);
+    ParseScope *inner_scope = scope_stack_top(state);
+    list_unlink(&inner_scope->_linked);
+
+    BasicBlock *while_end = ir_builder_new_basic_block(
+        function_stack_top(state)->builder,
+        while_cond_end
+    );
+
+    hash_for_each(inner_scope->upper_table, node) {
+        size_t old_reg = (size_t)_parse_find_in_symbol_table(state, node->key);
+        hash_set_and_update(
+            newer,
+            node->key,
+            value_from_int((int)old_reg)
+        );
+        ir_builder_mov_upper(
+            while_body_end,
+            old_reg,
+            (size_t)value_to_int(node->value)
+        );
+    }
+
+    list_prepend(&function_stack_top(state)->scopes, &inner_scope->_linked);
+    _parse_join_scope(state);
+
+    hash_for_each(newer, node) {
+        ir_builder_mov_upper(
+            while_end,
+            (size_t)_parse_find_in_symbol_table(state, node->key),
+            (size_t)value_to_int(node->value)
+        );
+    }
+
+    hash_destroy(newer);
+
+    ir_builder_br(while_cond_end, reg, while_body_start, while_end);
+    ir_builder_j(while_body_end, while_cond_start);
+    function_stack_top(state)->current_bb = while_end;
 }
 
 void
@@ -1742,25 +1576,23 @@ _parse_return_stmt(ParseState *state)
         ret_reg = _parse_right_hand_expr(state);
     }
     else {
-        ret_reg = _parse_allocate_register(state);
-        _parse_push_inst(
-            state,
-            cvm_inst_new_d_type(
-                I_UNDEFINED,
-                ret_reg,
-                0, 0
-            )
-        );
+        ret_reg = ir_builder_undefined(function_stack_top(state)->current_bb);
     }
-    _parse_push_inst(
-        state,
-        cvm_inst_new_d_type(
-            I_RET,
-            ret_reg,
-            0, 0
-        )
-    );
+    ir_builder_ret(function_stack_top(state)->current_bb, ret_reg);
 
+    tok = _lex_next(state);
+    if (tok != ';') {
+        parse_expect_error(state, "';'", tok);
+    }
+}
+
+void
+_parse_halt_stmt(ParseState *state)
+{
+    int tok = _lex_next(state);
+    assert(tok == TOK_ID);
+    assert(_parse_find_in_symbol_table(state, state->peaking_value) == -R_HALT);
+    ir_builder_halt(function_stack_top(state)->current_bb);
     tok = _lex_next(state);
     if (tok != ';') {
         parse_expect_error(state, "';'", tok);
@@ -1792,6 +1624,9 @@ _parse_statement(ParseState *state)
                         break;
                     case -R_RETURN:
                         _parse_return_stmt(state);
+                        break;
+                    case -R_HALT:
+                        _parse_halt_stmt(state);
                         break;
                     default:
                         _parse_expr_stmt(state);
@@ -1834,9 +1669,11 @@ parse_get_main_function(ParseState *state)
 
     list_node_init(&function->_linked);
     function->arguments_nr = func_scope->arguments_nr;
-    function->register_nr = func_scope->register_nr;
+    function->register_nr = func_scope->builder->register_nr + 1;
     function->capture_list = func_scope->capture_list;  func_scope->capture_list = NULL;
-    function->inst_list = func_scope->inst_list;        func_scope->inst_list = NULL;
+    function->inst_list = ir_builder_destroy(func_scope->builder);
+    func_scope->builder = NULL;
+    func_scope->current_bb = NULL;
 
     return function;
 }
