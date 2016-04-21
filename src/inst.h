@@ -25,7 +25,6 @@ enum InstType
 
     I_BNR,
     I_J,
-    I_JAL,
 
     I_LSTR,
 

@@ -514,13 +514,6 @@ cvm_state_run(VMState *vm)
             case I_J:
                 frame->pc = (size_t)inst.i_imm;
                 break;
-            case I_JAL:
-                cvm_set_register(
-                    vm, inst.i_rd,
-                    value_from_int(frame->pc)
-                );
-                frame->pc = (size_t)inst.i_imm;
-                break;
             case I_LSTR:
             {
                 CString *string = (CString*)inst.i_imm;
