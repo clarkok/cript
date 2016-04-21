@@ -22,7 +22,6 @@ output_inst(FILE *fout, Inst inst)
     switch (inst.type) {
         case I_LI:
         case I_BNR:
-        case I_JAL:
             fprintf(fout, "$%d,\t%d\n", inst.i_rd, inst.i_imm);
             break;
         case I_ADD:

@@ -24,7 +24,6 @@ const char INST_NAME[] =
 
     "bnr     "
     "j       "
-    "jal     "
 
     "lstr    "
 
