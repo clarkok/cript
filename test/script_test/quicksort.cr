@@ -1,7 +1,7 @@
 global.println('Quicksort example');
 global.println('Should output two lines, first is the random array, second is the sorted one');
 
-let n = 100;
+let n = 1000000;
 let array = [];
 let i = 0;
 
@@ -17,7 +17,7 @@ let output_array = function (array) {
     global.println();
 };
 
-output_array(array);
+// output_array(array);
 
 let export = {};
 
@@ -49,4 +49,4 @@ export.partition = function (arr, lo, hi) {
 };
 
 export.quicksort(array, 0, n - 1, 0);
-output_array(array);
+// output_array(array);

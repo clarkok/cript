@@ -11,7 +11,7 @@
 #include "hash.h"
 #include "cvm.h"
 
-#define YOUNG_GEN_BLOCK_SIZE    (1024 * 1024)
+#define YOUNG_GEN_BLOCK_SIZE    (32 * 1024 * 1024)
 
 typedef struct YoungGenBlock YoungGenBlock;
 
