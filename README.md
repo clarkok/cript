@@ -60,3 +60,7 @@ global.println('Hello World!');
 ## Example scripts
 
 See `test/script_test`, there is enough examples.
+
+## Current status
+
+Trying to optimize compiler
