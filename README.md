@@ -69,4 +69,4 @@ Trying to optimize compiler
 
 Haha, just kidding.
 
-![screenshot](/faster-than-ndoejs.png?raw=true "Faster than NodeJS")
+![screenshot](/faster-than-nodejs.png?raw=true "Faster than NodeJS")
