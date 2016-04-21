@@ -436,7 +436,10 @@ parse_state_new_from_file(const char *path)
     fseek(file, 0, SEEK_SET);
 
     char *content = malloc(file_size + 1);
-    fread(content, file_size, 1, file);
+    if (!fread(content, file_size, 1, file)) {
+        error_f("Cannot read file: %s\n", path);
+        return NULL;
+    }
     fclose(file);
 
     return _parse_state_new(path, content, 1);
@@ -1047,6 +1050,7 @@ _parse_compare_expr(ParseState *state)
                 break;
             default:
                 assert(0);
+                return 0;
         }
         ret = temp_reg;
         tok = _lex_peak(state);
@@ -1336,6 +1340,7 @@ _parse_block_stmt(ParseState *state)
 {
     int tok = _lex_next(state);
     assert(tok == '{');
+    (void)tok;
 
     _parse_push_scope(state);
     while (_lex_peak(state) != TOK_EOF && _lex_peak(state) != '}') {

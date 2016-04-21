@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project(cript)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32 -g")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -m32 -g")
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
 endif()

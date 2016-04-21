@@ -48,7 +48,10 @@ _young_gen_get_last_hash_from_bitmap(YoungGenBlock *block, size_t index, unsigne
 static inline YoungGenBlock *
 _young_gen_block_new()
 {
-    YoungGenBlock *ret = (YoungGenBlock*)aligned_alloc(YOUNG_GEN_BLOCK_SIZE, YOUNG_GEN_BLOCK_SIZE);
+    YoungGenBlock *ret;
+    if (posix_memalign((void**)&ret, YOUNG_GEN_BLOCK_SIZE, YOUNG_GEN_BLOCK_SIZE)) {
+        return NULL;
+    }
     ret->allocated = sizeof(YoungGenBlock);
     ret->object_count = 0;
     memset(ret->bitmap, 0, sizeof(ret->bitmap));

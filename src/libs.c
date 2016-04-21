@@ -139,7 +139,7 @@ _lib_typeof(VMState *vm, Value value)
             case HT_LIGHTFUNC:      return cvm_get_cstring_value(vm, "light_function");
             case HT_CLOSURE:        return cvm_get_cstring_value(vm, "closure");
             case HT_USERDATA:       return cvm_get_cstring_value(vm, "userdata");
-            default: assert(0);
+            default: assert(0);     return value_undefined();
         }
     }
 }
