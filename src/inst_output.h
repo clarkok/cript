@@ -58,7 +58,7 @@ output_inst(FILE *fout, Inst inst)
             fprintf(fout, "$%d\n", inst.i_rd);
             break;
         case I_NEW_CLS:
-            fprintf(fout, "$%d, 0x%x\n", inst.i_rd, inst.i_imm);
+            fprintf(fout, "$%d,\t0x%x\n", inst.i_rd, inst.i_imm);
             break;
         default:
             fprintf(fout, "\n");

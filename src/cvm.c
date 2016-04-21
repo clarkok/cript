@@ -127,7 +127,7 @@ cvm_state_push_frame(VMState *vm, VMFunction *function)
     frame->pc = 0;
     frame->regs[0] = value_from_int(0);
     frame->regs[1] = value_from_ptr(vm->global);
-    for (size_t i = 2; i < function->register_nr; ++i) {
+    for (size_t i = 2; i <= function->register_nr; ++i) {
         frame->regs[i] = value_undefined();
     }
 
