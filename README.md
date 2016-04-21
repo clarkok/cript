@@ -64,3 +64,9 @@ See `test/script_test`, there is enough examples.
 ## Current status
 
 Trying to optimize compiler
+
+## Faster than NodeJS
+
+Haha, just kidding.
+
+![Screen shot](faster-than-ndoejs.png)
