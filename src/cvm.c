@@ -122,7 +122,7 @@ _cvm_set_hash_in_register(VMState *vm, size_t reg, uintptr_t key, Value val)
 static inline void
 cvm_state_push_frame(VMState *vm, VMFunction *function)
 {
-    VMFrame *frame = malloc(sizeof(VMFrame) + function->register_nr * sizeof(Value));
+    VMFrame *frame = malloc(sizeof(VMFrame) + (function->register_nr + 1) * sizeof(Value));
     frame->function = function;
     frame->pc = 0;
     frame->regs[0] = value_from_int(0);
@@ -228,7 +228,7 @@ cvm_state_new(InstList *main_inst_list, StringPool *string_pool)
     VMFunction *main_function = malloc(sizeof(VMFunction));
     list_node_init(&main_function->_linked);
     main_function->arguments_nr = 0;
-    main_function->register_nr = 65536;
+    main_function->register_nr = 65535;
     main_function->capture_list = hash_new(HASH_MIN_CAPACITY);
     hash_set_and_update(main_function->capture_list, 0, value_from_int(0));
 

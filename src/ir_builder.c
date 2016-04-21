@@ -19,6 +19,17 @@ _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
     ret->entry_point = value_from_ptr((void*)(0xFFFFFFFFu << 2));
     ret->br_reg = 0;
     ret->constant_table = hash_new(HASH_MIN_CAPACITY);
+    ret->numeric_value = hash_new(HASH_MIN_CAPACITY);
+    hash_set_and_update(
+        ret->constant_table,
+        value_from_int(0)._int,
+        value_from_int(0)
+    );
+    hash_set_and_update(
+        ret->numeric_value,
+        0,
+        value_from_int(0)
+    );
     ret->then_bb = NULL;
     ret->else_bb = NULL;
     return ret;
@@ -29,6 +40,7 @@ _ir_builder_basic_block_destroy(BasicBlock *bb)
 {
     inst_list_destroy(bb->inst_list);
     hash_destroy(bb->constant_table);
+    hash_destroy(bb->numeric_value);
     free(bb);
 }
 
@@ -204,19 +216,58 @@ ir_builder_j(BasicBlock *bb, BasicBlock *successor_bb)
 static inline int
 _ir_builder_find_in_constant_table(BasicBlock *bb, Value constant)
 {
+    BasicBlock *begin_bb = bb;
     while (bb) {
         Value result = hash_find(bb->constant_table, (uintptr_t)constant._int);
-        if (!value_is_undefined(result)) { return value_to_int(result); }
+        if (!value_is_undefined(result)) {
+            while (begin_bb) {
+                Value path_result = hash_find(begin_bb->constant_table, (uintptr_t)constant._int);
+                if (value_is_undefined(path_result)) {
+                    hash_set_and_update(
+                        begin_bb->constant_table,
+                        (uintptr_t)constant._int,
+                        result
+                    );
+                    begin_bb = begin_bb->dominator;
+                }
+                else { break; }
+            }
+            return value_to_int(result);
+        }
         bb = bb->dominator;
     }
     return -1;
 }
 
+static inline Value
+_ir_builder_find_in_numeric_table(BasicBlock *bb, size_t reg)
+{
+    BasicBlock *begin_bb = bb;
+    while (bb) {
+        Value result = hash_find(bb->numeric_value, (uintptr_t)reg);
+        if (!value_is_undefined(result)) {
+            while (begin_bb) {
+                Value path_result = hash_find(begin_bb->numeric_value, (uintptr_t)reg);
+                if (value_is_undefined(path_result)) {
+                    hash_set_and_update(
+                        begin_bb->numeric_value,
+                        (uintptr_t)reg,
+                        result
+                    );
+                    begin_bb = begin_bb->dominator;
+                }
+                else { break; }
+            }
+            return result;
+        }
+        bb = bb->dominator;
+    }
+    return value_undefined();
+}
+
 size_t
 ir_builder_li(BasicBlock *bb, int imm)
 {
-    if (!imm) return 0;
-
     int constant = _ir_builder_find_in_constant_table(bb, value_from_int(imm));
     if (constant >= 0) { return (size_t)constant; }
 
@@ -235,6 +286,11 @@ ir_builder_li(BasicBlock *bb, int imm)
         bb->constant_table,
         (uintptr_t)(value_from_int(imm)._int),
         value_from_int(ret)
+    );
+    hash_set_and_update(
+        bb->numeric_value,
+        ret,
+        value_from_int(imm)
     );
     return ret;
 }
@@ -264,10 +320,20 @@ ir_builder_lstr(BasicBlock *bb, CString *string)
     return ret;
 }
 
+#define _ir_fold_constant(bb, rs, rt, op)                                               \
+    do {                                                                                \
+        Value const_l = _ir_builder_find_in_numeric_table(bb, rs),                      \
+              const_r = _ir_builder_find_in_numeric_table(bb, rt);                      \
+        if (value_is_int(const_l) && value_is_int(const_r)) {                           \
+            return ir_builder_li(bb, value_to_int(const_l) op value_to_int(const_r));   \
+        }                                                                               \
+    } while (0)
+
 size_t
 ir_builder_add(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, +);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -286,6 +352,7 @@ size_t
 ir_builder_sub(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, -);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -304,6 +371,7 @@ size_t
 ir_builder_mul(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, *);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -322,6 +390,7 @@ size_t
 ir_builder_div(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, /);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -340,6 +409,7 @@ size_t
 ir_builder_mod(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, %);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -358,6 +428,7 @@ size_t
 ir_builder_seq(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, ==);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -376,6 +447,7 @@ size_t
 ir_builder_slt(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, <);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -394,6 +466,7 @@ size_t
 ir_builder_sle(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
+    _ir_fold_constant(bb, rs, rt, <=);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -441,6 +514,16 @@ ir_builder_mov(BasicBlock *bb, size_t rs)
             0
         )
     );
+
+    Value constant = _ir_builder_find_in_numeric_table(bb, rs);
+    if (value_is_int(constant)) {
+        hash_set_and_update(
+            bb->numeric_value,
+            ret,
+            constant
+        );
+    }
+
     return ret;
 }
 
@@ -458,6 +541,15 @@ ir_builder_mov_upper(BasicBlock *bb, size_t rd, size_t rs)
             0
         )
     );
+
+    Value constant = _ir_builder_find_in_numeric_table(bb, rs);
+    if (value_is_int(constant)) {
+        hash_set_and_update(
+            bb->numeric_value,
+            rd,
+            constant
+        );
+    }
 }
 
 size_t

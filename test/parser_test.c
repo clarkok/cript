@@ -196,6 +196,7 @@ parse_test(CuTest *tc)
     intptr_t reg_b = get_reg_from_parse_state(state, "b");
 
     VMState *vm = cvm_state_new_from_parse_state(state);
+    output_vm_state(stdout, vm);
     cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));

@@ -22,6 +22,7 @@ typedef struct BasicBlock
     Value entry_point;
     size_t br_reg;
     Hash *constant_table;
+    Hash *numeric_value;
     struct BasicBlock *then_bb;
     struct BasicBlock *else_bb;
 } BasicBlock;
