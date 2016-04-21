@@ -9,6 +9,7 @@
 #include "inst_list.h"
 #include "string_pool.h"
 #include "value.h"
+#include "hash.h"
 
 #include "list.h"
 
@@ -20,6 +21,7 @@ typedef struct BasicBlock
     InstList *inst_list;
     Value entry_point;
     size_t br_reg;
+    Hash *constant_table;
     struct BasicBlock *then_bb;
     struct BasicBlock *else_bb;
 } BasicBlock;

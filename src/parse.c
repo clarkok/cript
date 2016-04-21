@@ -824,12 +824,6 @@ _parse_unary_expr(ParseState *state)
                 break;
             }
             else {
-                if (reg == 0) {
-                    parse_warn(state, "variable '%.*s' used before initializing it",
-                               literal->length,
-                               literal->content
-                    );
-                }
                 _lex_next(state);
                 ret = (size_t)reg;
             }
@@ -903,68 +897,71 @@ size_t
 _parse_postfix_expr(ParseState *state)
 {
     size_t ret = _parse_unary_expr(state);
-    size_t this_reg = (size_t)_parse_find_in_symbol_table(
-        state,
-        string_pool_find_str(state->string_pool, "global")
-    );
 
     int tok = _lex_peak(state);
-    while (tok == '.' || tok == '[' || tok == '(') {
-        if (tok == '.') {
-            _lex_next(state);
-            tok = _lex_next(state);
-            if (tok != TOK_ID) {
-                parse_expect_error(state, "identifier", tok);
-                return 0;
+    if (tok == '.' || tok == '[' || tok == '(') {
+        size_t this_reg = (size_t)_parse_find_in_symbol_table(
+            state,
+            string_pool_find_str(state->string_pool, "global")
+        );
+
+        while (tok == '.' || tok == '[' || tok == '(') {
+            if (tok == '.') {
+                _lex_next(state);
+                tok = _lex_next(state);
+                if (tok != TOK_ID) {
+                    parse_expect_error(state, "identifier", tok);
+                    return 0;
+                }
+
+                size_t key_reg = ir_builder_lstr(
+                    function_stack_top(state)->current_bb,
+                    (CString*)state->peaking_value
+                );
+
+                size_t temp_reg = ir_builder_get_obj(
+                    function_stack_top(state)->current_bb,
+                    ret,
+                    key_reg
+                );
+
+                this_reg = ret;
+                ret = temp_reg;
+            }
+            else if (tok == '[') {
+                _lex_next(state);
+                size_t key_reg = _parse_right_hand_expr(state);
+                size_t temp_reg = ir_builder_get_obj(
+                    function_stack_top(state)->current_bb,
+                    ret,
+                    key_reg
+                );
+                tok = _lex_next(state);
+                if (tok != ']') {
+                    parse_expect_error(state, "']'", tok);
+                    return 0;
+                }
+
+                this_reg = ret;
+                ret = temp_reg;
+            }
+            else {
+                size_t func_reg = ret;
+                size_t arg_reg = _parse_arguments(state, this_reg);
+                size_t temp_reg = ir_builder_call(
+                    function_stack_top(state)->current_bb,
+                    func_reg,
+                    arg_reg
+                );
+                this_reg = (size_t)_parse_find_in_symbol_table(
+                    state,
+                    string_pool_find_str(state->string_pool, "global")
+                );
+                ret = temp_reg;
             }
 
-            size_t key_reg = ir_builder_lstr(
-                function_stack_top(state)->current_bb,
-                (CString*)state->peaking_value
-            );
-
-            size_t temp_reg = ir_builder_get_obj(
-                function_stack_top(state)->current_bb,
-                ret,
-                key_reg
-            );
-
-            this_reg = ret;
-            ret = temp_reg;
+            tok = _lex_peak(state);
         }
-        else if (tok == '[') {
-            _lex_next(state);
-            size_t key_reg = _parse_right_hand_expr(state);
-            size_t temp_reg = ir_builder_get_obj(
-                function_stack_top(state)->current_bb,
-                ret,
-                key_reg
-            );
-            tok = _lex_next(state);
-            if (tok != ']') {
-                parse_expect_error(state, "']'", tok);
-                return 0;
-            }
-
-            this_reg = ret;
-            ret = temp_reg;
-        }
-        else {
-            size_t func_reg = ret;
-            size_t arg_reg = _parse_arguments(state, this_reg);
-            size_t temp_reg = ir_builder_call(
-                function_stack_top(state)->current_bb,
-                func_reg,
-                arg_reg
-            );
-            this_reg = (size_t)_parse_find_in_symbol_table(
-                state,
-                string_pool_find_str(state->string_pool, "global")
-            );
-            ret = temp_reg;
-        }
-
-        tok = _lex_peak(state);
     }
 
     return ret;
@@ -1184,7 +1181,7 @@ _parse_assignment_expr(ParseState *state)
     CString *literal = (CString*)state->peaking_value;
     size_t object_reg = (size_t)_parse_find_in_symbol_table(state, state->peaking_value);
     size_t this_reg = (size_t)_parse_find_in_symbol_table(state, string_pool_find_str(state->string_pool, "global"));
-    size_t key_reg = 0;
+    size_t key_reg = ~0u;
     tok = _lex_peak(state);
 
     while (tok == '.' || tok == '[' || tok == '(') {
@@ -1253,7 +1250,7 @@ _parse_assignment_expr(ParseState *state)
     size_t current_reg = function_stack_top(state)->builder->register_nr;
     size_t result_reg = _parse_right_hand_expr(state);
 
-    if (key_reg) {
+    if (key_reg != ~0u) {
         ir_builder_set_obj(
             function_stack_top(state)->current_bb,
             object_reg,
@@ -1302,13 +1299,18 @@ _parse_let_stmt(ParseState *state)
             _lex_next(state);
             size_t current_reg = function_stack_top(state)->builder->register_nr;
             size_t new_reg = _parse_right_hand_expr(state);
-            if (current_reg == function_stack_top(state)->builder->register_nr) {
+            size_t register_used = function_stack_top(state)->builder->register_nr - current_reg;
+            if (!register_used) {
                 new_reg = ir_builder_mov(function_stack_top(state)->current_bb, new_reg);
             }
             _parse_define_into_scope(scope_stack_top(state), literal, new_reg);
         }
         else {
-            _parse_define_into_scope(scope_stack_top(state), literal, 0);
+            _parse_define_into_scope(
+                scope_stack_top(state),
+                literal,
+                ir_builder_undefined(function_stack_top(state)->current_bb)
+            );
         }
     } while (_lex_peak(state) == ',');
 
@@ -1491,7 +1493,7 @@ _parse_while_stmt(ParseState *state)
 
     BasicBlock *while_cond_start = ir_builder_new_basic_block(
         function_stack_top(state)->builder,
-        function_stack_top(state)->current_bb
+        NULL
     );
 
     ir_builder_j(function_stack_top(state)->current_bb, while_cond_start);

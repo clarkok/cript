@@ -18,9 +18,18 @@ _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
     ret->inst_list = inst_list_new(16);
     ret->entry_point = value_from_ptr((void*)(0xFFFFFFFFu << 2));
     ret->br_reg = 0;
+    ret->constant_table = hash_new(HASH_MIN_CAPACITY);
     ret->then_bb = NULL;
     ret->else_bb = NULL;
     return ret;
+}
+
+static inline void
+_ir_builder_basic_block_destroy(BasicBlock *bb)
+{
+    inst_list_destroy(bb->inst_list);
+    hash_destroy(bb->constant_table);
+    free(bb);
 }
 
 IRBuilder *
@@ -40,7 +49,7 @@ ir_builder_entry(IRBuilder *builder)
 BasicBlock *
 ir_builder_new_basic_block(IRBuilder *builder, BasicBlock *dominator_bb)
 {
-    assert(list_from_node(&dominator_bb->_linked) == &builder->basic_blocks);
+    assert(!dominator_bb || list_from_node(&dominator_bb->_linked) == &builder->basic_blocks);
     return _ir_builder_basic_block_new(builder, dominator_bb);
 }
 
@@ -160,11 +169,9 @@ ir_builder_destroy(IRBuilder *builder)
     }
 
     while (list_size(&builder->basic_blocks)) {
-        BasicBlock *bb =
-            list_get(list_unlink(list_head(&builder->basic_blocks)), BasicBlock, _linked);
-
-        inst_list_destroy(bb->inst_list);
-        free(bb);
+        _ir_builder_basic_block_destroy(
+            list_get(list_unlink(list_head(&builder->basic_blocks)), BasicBlock, _linked)
+        );
     }
 
     return ret;
@@ -194,9 +201,25 @@ ir_builder_j(BasicBlock *bb, BasicBlock *successor_bb)
     bb->else_bb = successor_bb;
 }
 
+static inline int
+_ir_builder_find_in_constant_table(BasicBlock *bb, Value constant)
+{
+    while (bb) {
+        Value result = hash_find(bb->constant_table, (uintptr_t)constant._int);
+        if (!value_is_undefined(result)) { return value_to_int(result); }
+        bb = bb->dominator;
+    }
+    return -1;
+}
+
 size_t
 ir_builder_li(BasicBlock *bb, int imm)
 {
+    if (!imm) return 0;
+
+    int constant = _ir_builder_find_in_constant_table(bb, value_from_int(imm));
+    if (constant >= 0) { return (size_t)constant; }
+
     assert_basic_block_not_end(bb);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
@@ -208,12 +231,20 @@ ir_builder_li(BasicBlock *bb, int imm)
             imm
         )
     );
+    hash_set_and_update(
+        bb->constant_table,
+        (uintptr_t)(value_from_int(imm)._int),
+        value_from_int(ret)
+    );
     return ret;
 }
 
 size_t
 ir_builder_lstr(BasicBlock *bb, CString *string)
 {
+    int constant = _ir_builder_find_in_constant_table(bb, value_from_string(string));
+    if (constant >= 0) { return (size_t)constant; }
+
     assert_basic_block_not_end(bb);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
@@ -224,6 +255,11 @@ ir_builder_lstr(BasicBlock *bb, CString *string)
             ret,
             (int)string
         )
+    );
+    hash_set_and_update(
+        bb->constant_table,
+        (uintptr_t)(value_from_string(string)._int),
+        value_from_int(ret)
     );
     return ret;
 }

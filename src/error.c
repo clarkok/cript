@@ -14,7 +14,7 @@ void
 error_handle(const char *file, int line, const char *msg)
 {
     fprintf(stderr, "ERROR: %s\n    thrown at %s:%d\n\n", msg, file, line);
-    exit(-1);
+    __builtin_trap();
 }
 
 void
