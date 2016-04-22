@@ -96,6 +96,7 @@ _young_gen_allocate(YoungGenBlock *block, size_t size)
 Hash *
 young_gen_new_hash(YoungGen *young_gen, size_t capacity, int type)
 {
+    capacity = hash_normalize_capacity(capacity);
     size_t hash_total_size = _hash_total_size(capacity);
     return hash_init(
             _young_gen_allocate(young_gen->current, hash_total_size),

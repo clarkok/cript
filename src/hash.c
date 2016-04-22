@@ -28,6 +28,7 @@ Hash *
 hash_init(void *hash, size_t capacity, int type)
 {
     if (!hash) return NULL;
+    assert(1 << __builtin_ctz(capacity) == capacity);
 
     Hash *ret = hash;
     ret->type = type;
@@ -44,7 +45,7 @@ hash_destroy(Hash *hash)
 Value
 hash_find(Hash *hash, uintptr_t key)
 {
-    uintptr_t index = key % hash->capacity;
+    uintptr_t index = key & (hash->capacity - 1);
 
     while (hash->content[index].key != key && !value_is_null(hash->content[index].value)) {
         index = _hash_next_index(index, hash->capacity);

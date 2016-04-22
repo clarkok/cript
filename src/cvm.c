@@ -601,7 +601,7 @@ cvm_state_run(VMState *vm)
             case I_NEW_CLS:
             {
                 VMFunction *func = (VMFunction*)inst.i_imm;
-                Hash *closure = _cvm_allocate_new_hash(vm, 2 * hash_size(func->capture_list), HT_CLOSURE);
+                Hash *closure = _cvm_allocate_new_hash(vm, hash_size(func->capture_list), HT_CLOSURE);
                 closure->hi_closure = func;
                 cvm_set_register(
                     vm, inst.i_rd,

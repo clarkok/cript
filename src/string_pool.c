@@ -125,7 +125,7 @@ string_pool_destroy(StringPool *pool)
 StringPool *
 _string_expand_pool(StringPool *original)
 {
-    StringPool *ret = _string_pool_construct(_expand_size(original->capacity));
+    StringPool *ret = _string_pool_construct(_string_expand_size(original->capacity));
 
     list_move(&ret->string_pages, &original->string_pages);
 

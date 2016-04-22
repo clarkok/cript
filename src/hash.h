@@ -97,6 +97,13 @@ typedef struct Hash
 Hash *hash_new(size_t capacity);
 void hash_destroy(Hash *hash);
 
+static inline size_t
+hash_normalize_capacity(size_t expect_capacity)
+{
+    if (1 << __builtin_ctz(expect_capacity) == expect_capacity) return expect_capacity;
+    else return (1 << ((sizeof(size_t) * 8) - __builtin_clz(expect_capacity)));
+}
+
 /**
  * find a value of a key in this hash table
  *

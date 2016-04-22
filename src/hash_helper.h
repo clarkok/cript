@@ -7,7 +7,7 @@
 
 static inline uintptr_t
 _next_index(uintptr_t key, size_t capacity)
-{ return ((key * 2166136261u) + 16777619u) % capacity; }
+{ return ((key * 2166136261u) + 16777619u) & (capacity - 1); }
 
 static inline size_t
 _expand_size(size_t original_capacity)
