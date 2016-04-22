@@ -614,8 +614,15 @@ cvm_state_run(VMState *vm)
                 break;
             case I_BNR:
 #endif
-                if (!value_to_int(cvm_get_register(vm, inst.i_rd))) {
-                    frame->pc += inst.i_imm;
+                {
+                    Value val = cvm_get_register(vm, inst.i_rd);
+                    if (
+                        value_is_undefined(val) ||
+                        value_is_null(val) ||
+                        (value_is_int(val) && !value_to_int(val))
+                    ) {
+                        frame->pc += inst.i_imm;
+                    }
                 }
 #if USE_COMPUTED_GOTO
                 DISPATCH();

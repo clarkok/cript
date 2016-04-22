@@ -441,6 +441,7 @@ parse_state_new_from_file(const char *path)
         return NULL;
     }
     fclose(file);
+    content[file_size] = '\0';
 
     return _parse_state_new(path, content, 1);
 }
@@ -452,8 +453,11 @@ parse_state_expand_from_file(VMState *vm, const char *path)
     string_pool_destroy(state->string_pool);
     state->string_pool = vm->string_pool;   vm->string_pool = NULL;
 
-    size_t global_reg = function_stack_top(state)->builder->register_nr - 1;
-    assert(global_reg == 1);
+    size_t global_reg = function_stack_top(state)->builder->register_nr;
+    if (global_reg != 1) {
+        error_f("Global register should be 1, but actual is %d", global_reg);
+        assert(global_reg == 1);
+    }
 
     _parse_define_into_scope(
         list_get(list_head(&function_stack_top(state)->scopes), ParseScope, _linked),
@@ -971,14 +975,40 @@ _parse_postfix_expr(ParseState *state)
 }
 
 size_t
+_parse_prefix_expr(ParseState *state)
+{
+    int tok = _lex_peak(state);
+    if (tok == '!') {
+        _lex_next(state);
+
+        size_t ret = _parse_prefix_expr(state);
+        return ir_builder_lnot(
+            function_stack_top(state)->current_bb,
+            ret
+        );
+    }
+    else if (tok == '-') {
+        _lex_next(state);
+
+        size_t ret = _parse_prefix_expr(state);
+        return ir_builder_sub(
+            function_stack_top(state)->current_bb,
+            ir_builder_li(function_stack_top(state)->current_bb, 0),
+            ret
+        );
+    }
+    return _parse_postfix_expr(state);
+}
+
+size_t
 _parse_mul_expr(ParseState *state)
 {
-    size_t ret = _parse_postfix_expr(state);
+    size_t ret = _parse_prefix_expr(state);
 
     int tok = _lex_peak(state);
     while (tok == '*' || tok == '/' || tok == '%') {
         _lex_next(state);
-        size_t b_reg = _parse_postfix_expr(state);
+        size_t b_reg = _parse_prefix_expr(state);
         size_t temp_reg =
             tok == '*' ? ir_builder_mul(function_stack_top(state)->current_bb, ret, b_reg) :
             tok == '/' ? ir_builder_div(function_stack_top(state)->current_bb, ret, b_reg) :
@@ -1145,7 +1175,7 @@ _parse_logic_or_expr(ParseState *state)
             );
             function_stack_top(state)->current_bb = next_block;
 
-            ret = _parse_compare_expr(state);
+            ret = _parse_logic_and_expr(state);
             tok = _lex_peak(state);
         }
 

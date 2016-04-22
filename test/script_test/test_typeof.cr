@@ -1,5 +1,6 @@
-global.println('Test typeof');
-global.println('should output 6 types');
+global.print('Test typeof ...');
+
+let assert = global.import('assert.cr');
 
 let int = 1;
 let str = 'string';
@@ -8,9 +9,11 @@ let arr = [];
 let clos = function () {};
 let func = global.print;
 
-global.println(global.typeof(int));
-global.println(global.typeof(str));
-global.println(global.typeof(obj));
-global.println(global.typeof(arr));
-global.println(global.typeof(clos));
-global.println(global.typeof(func));
+assert.assertStringEq('integer', global.typeof(int));
+assert.assertStringEq('string', global.typeof(str));
+assert.assertStringEq('object', global.typeof(obj));
+assert.assertStringEq('array', global.typeof(arr));
+assert.assertStringEq('closure', global.typeof(clos));
+assert.assertStringEq('light_function', global.typeof(func));
+
+global.println('Done');

@@ -1,15 +1,15 @@
-global.println('Test sizeof');
-global.println('should print some size, view the code');
+global.print('Test sizeof... ');
 
 let sizeof = global.sizeof;
-let println = global.println;
+let assert = global.import('assert.cr');
 
-println(sizeof(1));
-println(sizeof("12345"));
-println(sizeof({}));
-println(sizeof([]));
-println(sizeof({a : 1, b : 2, c : 3}));
-println(sizeof([1, 2, 3, 4, 5]));
-println(sizeof(function () {}));
-println(sizeof(global.println));
+assert.assertIntEq(-1, sizeof(1));
+assert.assertIntEq(5, sizeof("12345"));
+assert.assertIntEq(0, sizeof({}));
+assert.assertIntEq(0, sizeof([]));
+assert.assertIntEq(3, sizeof({a : 1, b : 2, c : 3}));
+assert.assertIntEq(5, sizeof([1, 2, 3, 4, 5]));
+assert.assertIntEq(-1, sizeof(function () {}));
+assert.assertIntEq(-1, sizeof(global.println));
 
+global.println('Done');

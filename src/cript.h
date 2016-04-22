@@ -7,6 +7,6 @@
 
 #define CRIPT_VERSION "0.1.0"
 
-#define USE_COMPUTED_GOTO   1
+#define USE_COMPUTED_GOTO   0
 
 #endif //CRIPT_CRIPT_H
