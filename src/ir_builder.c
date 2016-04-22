@@ -11,6 +11,37 @@
 #define ir_builder_from_bb(bb)  \
     container_of(list_from_node(&bb->_linked), IRBuilder, basic_blocks)
 
+enum SubExprType {
+    S_ADD = 0,
+    S_SUB,
+    S_MUL,
+    S_DIV,
+    S_MOD,
+    S_SEQ,
+    S_SLT,
+    S_SLE,
+    S_LNOT,
+
+    SUB_EXPR_TYPE_NR
+};
+
+#define SUBEXPR_TYPE_BITS           (4)
+#define SUBEXPR_REG_BITS            ((sizeof(uintptr_t) * 8) - SUBEXPR_TYPE_BITS)
+#define SUBEXPR_REG_LIMIT_BITS      (SUBEXPR_REG_BITS / 2)
+#define SUBEXPR_REG_LIMIT           (1 << SUBEXPR_REG_LIMIT_BITS)
+
+_Static_assert(
+    (SUB_EXPR_TYPE_NR <= (1 << SUBEXPR_TYPE_BITS)),
+    "Current SubExprType is 4 bits"
+);
+
+static inline uintptr_t
+_ir_builder_subexpr_key(unsigned op, size_t reg_a, size_t reg_b)
+{
+    if (reg_a >= SUBEXPR_REG_LIMIT || reg_b >= SUBEXPR_REG_LIMIT) return 0;
+    return (op << SUBEXPR_REG_BITS) | (reg_a << SUBEXPR_REG_LIMIT_BITS) | reg_b;
+}
+
 static inline BasicBlock *
 _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
 {
@@ -21,18 +52,19 @@ _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
     ret->entry_point = value_from_ptr((void*)(0xFFFFFFFFu << 2));
     ret->br_reg = 0;
     ret->constant_table = hash_new(HASH_MIN_CAPACITY);
-    ret->numeric_value = hash_new(HASH_MIN_CAPACITY);
-    ret->returned = 0;
     hash_set_and_update(
         ret->constant_table,
         value_from_int(0)._int,
         value_from_int(0)
     );
+    ret->numeric_value = hash_new(HASH_MIN_CAPACITY);
     hash_set_and_update(
         ret->numeric_value,
         0,
         value_from_int(0)
     );
+    ret->subexpr_table = hash_new(HASH_MIN_CAPACITY);
+    ret->returned = 0;
     ret->then_bb = NULL;
     ret->else_bb = NULL;
     return ret;
@@ -44,6 +76,7 @@ _ir_builder_basic_block_destroy(BasicBlock *bb)
     inst_list_destroy(bb->inst_list);
     hash_destroy(bb->constant_table);
     hash_destroy(bb->numeric_value);
+    hash_destroy(bb->subexpr_table);
     free(bb);
 }
 
@@ -424,6 +457,52 @@ _ir_builder_find_in_numeric_table(BasicBlock *bb, size_t reg)
     return value_undefined();
 }
 
+static inline Value
+_ir_builder_find_in_subexpr_table(BasicBlock *bb, unsigned op, size_t reg_a, size_t reg_b)
+{
+    uintptr_t key = _ir_builder_subexpr_key(op, reg_a, reg_b);
+    if (!key) { return value_undefined(); }
+    BasicBlock *begin_bb = bb;
+    while (bb) {
+        Value result = hash_find(bb->subexpr_table, key);
+        if (!value_is_undefined(result)) {
+            while (begin_bb) {
+                Value path_result = hash_find(begin_bb->subexpr_table, key);
+                if (value_is_undefined(path_result)) {
+                    hash_set_and_update(
+                        begin_bb->subexpr_table,
+                        key,
+                        result
+                    );
+                    begin_bb = begin_bb->dominator;
+                }
+                else { break; }
+            }
+            return result;
+        }
+        bb = bb->dominator;
+    }
+    return value_undefined();
+}
+
+static inline void
+_ir_builder_set_subexpr_table(
+    BasicBlock *bb,
+    unsigned op,
+    size_t reg_a,
+    size_t reg_b,
+    size_t result
+    )
+{
+    uintptr_t key = _ir_builder_subexpr_key(op, reg_a, reg_b);
+    if (!key) { return; }
+    hash_set_and_update(
+        bb->subexpr_table,
+        key,
+        value_from_int(result)
+    );
+}
+
 size_t
 ir_builder_li(BasicBlock *bb, int imm)
 {
@@ -488,11 +567,20 @@ ir_builder_lstr(BasicBlock *bb, CString *string)
         }                                                                               \
     } while (0)
 
+#define _ir_subexpr_estimate(bb, op, rs, rt)                                            \
+    do {                                                                                \
+        Value subexpr_result = _ir_builder_find_in_subexpr_table(bb, op, rs, rt);       \
+        if (!value_is_undefined(subexpr_result)) {                                      \
+            return (size_t)value_to_int(subexpr_result);                                \
+        }                                                                               \
+    } while (0)
+
 size_t
 ir_builder_add(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, +);
+    _ir_subexpr_estimate(bb, S_ADD, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -506,6 +594,8 @@ ir_builder_add(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_ADD, rs, rt, ret);
+    _ir_builder_set_subexpr_table(bb, S_ADD, rt, rs, ret);
     return ret;
 }
 
@@ -514,6 +604,7 @@ ir_builder_sub(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, -);
+    _ir_subexpr_estimate(bb, S_SUB, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -527,6 +618,7 @@ ir_builder_sub(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_SUB, rs, rt, ret);
     return ret;
 }
 
@@ -535,6 +627,7 @@ ir_builder_mul(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, *);
+    _ir_subexpr_estimate(bb, S_MUL, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -548,6 +641,8 @@ ir_builder_mul(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_MUL, rs, rt, ret);
+    _ir_builder_set_subexpr_table(bb, S_MUL, rt, rs, ret);
     return ret;
 }
 
@@ -556,6 +651,7 @@ ir_builder_div(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, /);
+    _ir_subexpr_estimate(bb, S_DIV, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -569,6 +665,7 @@ ir_builder_div(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_DIV, rs, rt, ret);
     return ret;
 }
 
@@ -577,6 +674,7 @@ ir_builder_mod(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, %);
+    _ir_subexpr_estimate(bb, S_MOD, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -590,6 +688,7 @@ ir_builder_mod(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_MOD, rs, rt, ret);
     return ret;
 }
 
@@ -598,6 +697,7 @@ ir_builder_seq(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, ==);
+    _ir_subexpr_estimate(bb, S_SEQ, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -611,6 +711,8 @@ ir_builder_seq(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_SEQ, rs, rt, ret);
+    _ir_builder_set_subexpr_table(bb, S_SEQ, rt, rs, ret);
     return ret;
 }
 
@@ -619,6 +721,7 @@ ir_builder_slt(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, <);
+    _ir_subexpr_estimate(bb, S_SLT, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -632,6 +735,7 @@ ir_builder_slt(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_SLT, rs, rt, ret);
     return ret;
 }
 
@@ -640,6 +744,7 @@ ir_builder_sle(BasicBlock *bb, size_t rs, size_t rt)
 {
     assert_basic_block_not_end(bb);
     _ir_fold_constant(bb, rs, rt, <=);
+    _ir_subexpr_estimate(bb, S_SLE, rs, rt);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -653,6 +758,7 @@ ir_builder_sle(BasicBlock *bb, size_t rs, size_t rt)
     );
     _ir_builder_use_register(bb, rs);
     _ir_builder_use_register(bb, rt);
+    _ir_builder_set_subexpr_table(bb, S_SLE, rs, rt, ret);
     return ret;
 }
 
@@ -660,6 +766,11 @@ size_t
 ir_builder_lnot(BasicBlock *bb, size_t rs)
 {
     assert_basic_block_not_end(bb);
+    Value const_reg = _ir_builder_find_in_numeric_table(bb, rs);
+    if (value_is_int(const_reg)) {
+        return ir_builder_li(bb, !value_to_int(const_reg));
+    }
+    _ir_subexpr_estimate(bb, S_LNOT, rs, 0);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
     inst_list_push(
@@ -672,6 +783,7 @@ ir_builder_lnot(BasicBlock *bb, size_t rs)
         )
     );
     _ir_builder_use_register(bb, rs);
+    _ir_builder_set_subexpr_table(bb, S_SLE, rs, 0, ret);
     return ret;
 }
 

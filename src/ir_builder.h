@@ -23,6 +23,7 @@ typedef struct BasicBlock
     size_t br_reg;
     Hash *constant_table;
     Hash *numeric_value;
+    Hash *subexpr_table;
     int returned;
     struct BasicBlock *then_bb;
     struct BasicBlock *else_bb;
