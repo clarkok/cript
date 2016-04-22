@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 
+#include "cript.h"
 #include "cvm.h"
 #include "error.h"
 #include "young_gen.h"
@@ -408,19 +409,75 @@ cvm_set_hash(VMState *vm, Hash *hash, uintptr_t key, Value val)
 Value
 cvm_state_run(VMState *vm)
 {
+#if USE_COMPUTED_GOTO
+    static void *LABEL_CONSTANT[] = {
+        &&i_unknown,
+        &&i_halt,
+        &&i_li,
+        &&i_add,
+        &&i_sub,
+        &&i_mul,
+        &&i_div,
+        &&i_mod,
+        &&i_seq,
+        &&i_slt,
+        &&i_sle,
+        &&i_lnot,
+        &&i_mov,
+        &&i_bnr,
+        &&i_j,
+        &&i_lstr,
+        &&i_new_obj,
+        &&i_new_arr,
+        &&i_set_obj,
+        &&i_get_obj,
+        &&i_call,
+        &&i_ret,
+        &&i_new_cls,
+        &&i_undefined,
+        &&i_null
+    };
+#endif
+
+#if USE_COMPUTED_GOTO
+    #define DISPATCH()                                              \
+    frame = vm_frame_top(vm);                                       \
+    inst = frame->function->inst_list->insts[frame->pc++];          \
+    goto *LABEL_CONSTANT[inst.type]
+
+        VMFrame *frame;
+        Inst inst;
+        DISPATCH();
+#else
     for (;;) {
         VMFrame *frame = vm_frame_top(vm);
         Inst inst = frame->function->inst_list->insts[frame->pc++];
         switch (inst.type) {
+#endif
+
+#if USE_COMPUTED_GOTO
+            i_halt:
+#else
             case I_HALT:
+#endif
                 return value_undefined();
+
+#if USE_COMPUTED_GOTO
+            i_li:
+#else
             case I_LI:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(inst.i_imm)
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_add:
+#else
                 break;
             case I_ADD:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -428,8 +485,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_sub:
+#else
                 break;
             case I_SUB:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -437,8 +499,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_mul:
+#else
                 break;
             case I_MUL:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -446,8 +513,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_div:
+#else
                 break;
             case I_DIV:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -455,8 +527,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_mod:
+#else
                 break;
             case I_MOD:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -464,8 +541,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_seq:
+#else
                 break;
             case I_SEQ:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -473,8 +555,13 @@ cvm_state_run(VMState *vm)
                         cvm_get_register(vm, inst.i_rt)._int
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_slt:
+#else
                 break;
             case I_SLT:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -482,8 +569,13 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_sle:
+#else
                 break;
             case I_SLE:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
@@ -491,57 +583,97 @@ cvm_state_run(VMState *vm)
                         value_to_int(cvm_get_register(vm, inst.i_rt))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_lnot:
+#else
                 break;
             case I_LNOT:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_int(
                         !value_to_int(cvm_get_register(vm, inst.i_rs))
                     )
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_mov:
+#else
                 break;
             case I_MOV:
+#endif
                 cvm_set_register(
                     vm, inst.i_rd,
                     cvm_get_register(vm, inst.i_rs)
                 );
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_bnr:
+#else
                 break;
             case I_BNR:
+#endif
                 if (!value_to_int(cvm_get_register(vm, inst.i_rd))) {
                     frame->pc += inst.i_imm;
                 }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_j:
+#else
                 break;
             case I_J:
+#endif
                 frame->pc = (size_t)inst.i_imm;
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_lstr:
+#else
                 break;
             case I_LSTR:
+#endif
             {
                 CString *string = (CString*)inst.i_imm;
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_string(string)
                 );
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_new_obj:
+#else
+                break;
             case I_NEW_OBJ:
+#endif
             {
                 Hash *new_obj = _cvm_allocate_new_object(vm, HASH_MIN_CAPACITY);
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_ptr(new_obj)
                 );
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_new_arr:
+#else
+                break;
             case I_NEW_ARR:
+#endif
             {
                 Hash *new_arr = _cvm_allocate_new_array(vm, HASH_MIN_CAPACITY);
                 cvm_set_register(
                     vm, inst.i_rd,
                     value_from_ptr(new_arr)
                 );
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_set_obj:
+#else
+                break;
             case I_SET_OBJ:
+#endif
             {
                 Hash *obj = _cvm_get_hash_in_register(vm, inst.i_rd);
                 uintptr_t key;
@@ -552,9 +684,14 @@ cvm_state_run(VMState *vm)
                     key = (uintptr_t)value_to_int(cvm_get_register(vm, inst.i_rt));
                 }
                 _cvm_set_hash_in_register(vm, inst.i_rd, key, cvm_get_register(vm, inst.i_rs));
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_get_obj:
+#else
+                break;
             case I_GET_OBJ:
+#endif
             {
                 Hash *obj = _cvm_get_hash_in_register(vm, inst.i_rs);
                 uintptr_t key;
@@ -568,9 +705,14 @@ cvm_state_run(VMState *vm)
                     vm, inst.i_rd,
                     hash_find(obj, key)
                 );
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_call:
+#else
+                break;
             case I_CALL:
+#endif
             {
                 Hash *func = _cvm_get_hash_in_register(vm, inst.i_rs);
                 if (func->type == HT_LIGHTFUNC) {
@@ -587,18 +729,28 @@ cvm_state_run(VMState *vm)
                 else {
                     hash_type_error(vm, HT_LIGHTFUNC, func->type);
                 }
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_ret:
+#else
+                break;
             case I_RET:
+#endif
             {
                 Value ret_val = cvm_get_register(vm, inst.i_rd);
                 cvm_state_pop_frame(vm);
                 if (!list_size(&vm_scene_top(vm)->frames)) { return ret_val; }
                 Inst original_inst = vm_frame_top(vm)->function->inst_list->insts[vm_frame_top(vm)->pc - 1];
                 cvm_set_register(vm, original_inst.i_rd, ret_val);
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_new_cls:
+#else
+                break;
             case I_NEW_CLS:
+#endif
             {
                 VMFunction *func = (VMFunction*)inst.i_imm;
                 Hash *closure = _cvm_allocate_new_hash(vm, hash_size(func->capture_list), HT_CLOSURE);
@@ -615,17 +767,36 @@ cvm_state_run(VMState *vm)
                         cvm_get_register(vm, capture->key)
                     );
                 }
-                break;
             }
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_undefined:
+#else
+                break;
             case I_UNDEFINED:
+#endif
                 cvm_set_register(vm, inst.i_rd, value_undefined());
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_null:
+#else
                 break;
             case I_NULL:
+#endif
                 cvm_set_register(vm, inst.i_rd, value_null());
+#if USE_COMPUTED_GOTO
+                DISPATCH();
+            i_unknown:
+#else
                 break;
             default:
+#endif
                 error_f("Unknown VM instrument (offset %d)", frame->pc - 1);
-                break;
+                return value_undefined();
+#if USE_COMPUTED_GOTO
+#undef DISPATCH
+#else
         }
     }
+#endif
 }
