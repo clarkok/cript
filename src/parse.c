@@ -368,7 +368,7 @@ _parse_function_scope_new()
     list_init(&ret->scopes);
     ret->arguments_nr = 0;
     ret->capture_list = hash_new(HASH_MIN_CAPACITY);
-    ret->builder = ir_builder_new(0);
+    ret->builder = ir_builder_new();
     ret->current_bb = ir_builder_entry(ret->builder);
 
     ParseScope *scope = malloc(sizeof(ParseScope));
@@ -720,7 +720,7 @@ _parse_function_literal(ParseState *state)
         return 0;
     }
 
-    size_t this_reg = _parse_allocate_register(state);
+    size_t this_reg = ir_builder_allocate_argument(function_stack_top(state)->builder);
     assert(this_reg == 1);
 
     _parse_define_into_scope(
@@ -737,7 +737,11 @@ _parse_function_literal(ParseState *state)
         }
         _lex_next(state);
         CString *literal = (CString*)state->peaking_value;
-        _parse_define_into_scope(scope_stack_top(state), literal, _parse_allocate_register(state));
+        _parse_define_into_scope(
+            scope_stack_top(state),
+            literal,
+            ir_builder_allocate_argument(function_stack_top(state)->builder)
+        );
         function_stack_top(state)->arguments_nr++;
 
         tok = _lex_peak(state);

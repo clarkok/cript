@@ -92,9 +92,10 @@ main(int argc, const char **argv)
     if (output_insts) {
         output_vm_state(stdout, vm);
     }
-
-    lib_register(vm);
-    cvm_state_run(vm);
+    else {
+        lib_register(vm);
+        cvm_state_run(vm);
+    }
 
     return 0;
 }

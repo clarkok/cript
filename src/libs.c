@@ -13,10 +13,20 @@
 #define register_value(vm, value, name)     \
     cvm_register_in_global(vm, value, name)
 
+static inline Hash *
+_lib_get_hash_from_value(Value val)
+{
+    Hash *ret = value_to_ptr(val);
+    while (ret->type == HT_REDIRECT) {
+        ret = (Hash*)ret->size;
+    }
+    return ret;
+}
+
 static Value
 _lib_print(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
 
     for (uintptr_t i = 1; i < hash_size(args); ++i) {
         Value val = hash_find(args, i);
@@ -36,7 +46,7 @@ _lib_print(VMState *vm, Value value)
 static Value
 _lib_println(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
 
     for (uintptr_t i = 1; i < hash_size(args); ++i) {
         Value val = hash_find(args, i);
@@ -57,8 +67,8 @@ _lib_println(VMState *vm, Value value)
 static Value
 _lib_foreach(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
-    Hash *array = value_to_ptr(hash_find(args, 1));
+    Hash *args = _lib_get_hash_from_value(value);
+    Hash *array = _lib_get_hash_from_value(hash_find(args, 1));
     Value callback = hash_find(args, 2);
 
     for (size_t i = 0; i < hash_size(array); ++i) {
@@ -80,7 +90,7 @@ _lib_random(VMState *vm, Value value)
 static Value
 _lib_import(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     CString *path = value_to_string(hash_find(args, 1));
     ParseState *state = parse_state_expand_from_file(vm, path->content);
     parse(state);
@@ -92,7 +102,7 @@ _lib_import(VMState *vm, Value value)
 static Value
 _lib_concat(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
 
     char buffer[256],
         *ptr = buffer;
@@ -113,7 +123,7 @@ _lib_concat(VMState *vm, Value value)
 static Value
 _lib_typeof(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     Value query_val = hash_find(args, 1);
 
     if (value_is_int(query_val)) {
@@ -129,7 +139,7 @@ _lib_typeof(VMState *vm, Value value)
         return cvm_get_cstring_value(vm, "undefined");
     }
     else {
-        Hash *hash = value_to_ptr(query_val);
+        Hash *hash = _lib_get_hash_from_value(query_val);
         while (hash->type == HT_REDIRECT) hash = (Hash*)hash->size;
         assert(hash->type != HT_GC_LEFT);
 
@@ -147,7 +157,7 @@ _lib_typeof(VMState *vm, Value value)
 static Value
 _lib_sizeof(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     Value query_val = hash_find(args, 1);
 
     if (value_is_string(query_val)) {
@@ -155,7 +165,7 @@ _lib_sizeof(VMState *vm, Value value)
         return value_from_int(string->length);
     }
     else if (value_is_ptr(query_val)) {
-        Hash *hash = value_to_ptr(query_val);
+        Hash *hash = _lib_get_hash_from_value(query_val);
         while (hash->type == HT_REDIRECT) hash = (Hash*)hash->size;
         assert(hash->type != HT_GC_LEFT);
 
@@ -177,7 +187,7 @@ _lib_sizeof(VMState *vm, Value value)
 static Value
 _lib_to_string(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     Value query_val = hash_find(args, 1);
 
     if (value_is_int(query_val)) {
@@ -193,7 +203,7 @@ _lib_to_string(VMState *vm, Value value)
 static Value
 _lib_parse_number(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     CString *string = value_to_string(hash_find(args, 1));
     int ret_val;
     sscanf(string->content, "%d", &ret_val);
@@ -203,7 +213,7 @@ _lib_parse_number(VMState *vm, Value value)
 static Value
 _lib_char_at(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     CString *string = value_to_string(hash_find(args, 1));
     int index = value_to_int(hash_find(args, 2));
 
@@ -222,7 +232,7 @@ _lib_char_at(VMState *vm, Value value)
 static Value
 _lib_char_code_at(VMState *vm, Value value)
 {
-    Hash *args = value_to_ptr(value);
+    Hash *args = _lib_get_hash_from_value(value);
     CString *string = value_to_string(hash_find(args, 1));
     int index = value_to_int(hash_find(args, 2));
 

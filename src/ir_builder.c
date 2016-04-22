@@ -48,10 +48,10 @@ _ir_builder_basic_block_destroy(BasicBlock *bb)
 }
 
 IRBuilder *
-ir_builder_new(size_t reserved_register)
+ir_builder_new()
 {
     IRBuilder *ret = malloc(sizeof(IRBuilder));
-    ret->register_nr = reserved_register;
+    ret->register_nr = 0;
     ret->register_usage = hash_new(HASH_MIN_CAPACITY);
     list_init(&ret->basic_blocks);
     _ir_builder_basic_block_new(ret, NULL);
@@ -331,6 +331,19 @@ ir_builder_destroy(IRBuilder *builder)
     free(builder);
 
     return ret;
+}
+
+size_t
+ir_builder_allocate_argument(IRBuilder *builder)
+{
+    assert(list_size(&builder->basic_blocks) == 1);
+    assert(
+        list_get(
+            list_head(&builder->basic_blocks),
+            BasicBlock,
+            _linked
+        )->inst_list->count == 0);
+    return ir_builder_allocate_register(builder);
 }
 
 size_t

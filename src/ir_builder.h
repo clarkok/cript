@@ -35,10 +35,11 @@ typedef struct IRBuilder
     LinkedList basic_blocks;
 } IRBuilder;
 
-IRBuilder *ir_builder_new(size_t reserved_register);
+IRBuilder *ir_builder_new();
 BasicBlock *ir_builder_entry(IRBuilder *builder);
 BasicBlock *ir_builder_new_basic_block(IRBuilder *builder, BasicBlock *dominator_bb);
 InstList *ir_builder_destroy(IRBuilder *builder);
+size_t ir_builder_allocate_argument(IRBuilder *builder);
 size_t ir_builder_allocate_register(IRBuilder *builder);
 
 void ir_builder_br(BasicBlock *bb, size_t rd, BasicBlock *then_bb, BasicBlock *else_bb);

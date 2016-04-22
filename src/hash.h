@@ -70,7 +70,7 @@ typedef struct Hash
 #define hi_u_data   _info._userdata._data
 #define hi_u_dtor   _info._userdata._destructor
 
-#define HASH_MIN_CAPACITY           (16)
+#define HASH_MIN_CAPACITY           (8)
 
 #define hash_capacity(hash)         ((hash)->capacity)
 #define hash_size(hash)             ((hash)->size)

@@ -780,7 +780,6 @@ parse_function_parse_test(CuTest *tc)
     parse(state);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
-    output_vm_state(stdout, vm);
     Value ret_val = cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 1, value_to_int(ret_val));
