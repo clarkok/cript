@@ -4,7 +4,9 @@
 
 #include <assert.h>
 
+#include "error.h"
 #include "ir_builder.h"
+#include "cvm.h"
 
 #define ir_builder_from_bb(bb)  \
     container_of(list_from_node(&bb->_linked), IRBuilder, basic_blocks)
@@ -20,6 +22,7 @@ _ir_builder_basic_block_new(IRBuilder *builder, BasicBlock *dominator)
     ret->br_reg = 0;
     ret->constant_table = hash_new(HASH_MIN_CAPACITY);
     ret->numeric_value = hash_new(HASH_MIN_CAPACITY);
+    ret->returned = 0;
     hash_set_and_update(
         ret->constant_table,
         value_from_int(0)._int,
@@ -49,6 +52,7 @@ ir_builder_new(size_t reserved_register)
 {
     IRBuilder *ret = malloc(sizeof(IRBuilder));
     ret->register_nr = reserved_register;
+    ret->register_usage = hash_new(HASH_MIN_CAPACITY);
     list_init(&ret->basic_blocks);
     _ir_builder_basic_block_new(ret, NULL);
     return ret;
@@ -63,6 +67,28 @@ ir_builder_new_basic_block(IRBuilder *builder, BasicBlock *dominator_bb)
 {
     assert(!dominator_bb || list_from_node(&dominator_bb->_linked) == &builder->basic_blocks);
     return _ir_builder_basic_block_new(builder, dominator_bb);
+}
+
+static inline void
+_ir_builder_use_register(BasicBlock *bb, size_t reg)
+{
+    IRBuilder *builder = container_of(list_from_node(&bb->_linked), IRBuilder, basic_blocks);
+    Value current = hash_find(builder->register_usage, reg);
+
+    if (value_is_undefined(current)) {
+        hash_set_and_update(
+            builder->register_usage,
+            reg,
+            value_from_int(1)
+        );
+    }
+    else {
+        hash_set_and_update(
+            builder->register_usage,
+            reg,
+            value_from_int(value_to_int(current) + 1)
+        );
+    }
 }
 
 static inline void
@@ -96,6 +122,8 @@ static inline void
 _ir_builder_jump_to(InstList **inst_list, BasicBlock *bb, BasicBlock *dst)
 {
     if (!dst) {
+        if (bb->returned) return;
+
         // cannot allocate new register here
         inst_list_push(
             *inst_list,
@@ -138,9 +166,114 @@ _ir_builder_jump_to(InstList **inst_list, BasicBlock *bb, BasicBlock *dst)
     }
 }
 
+static inline size_t
+_ir_builder_result_register(Inst inst)
+{
+    switch (inst.type) {
+        case I_LI:
+        case I_ADD:
+        case I_SUB:
+        case I_MUL:
+        case I_DIV:
+        case I_MOD:
+        case I_SEQ:
+        case I_SLT:
+        case I_SLE:
+        case I_LNOT:
+        case I_MOV:
+        case I_LSTR:
+        case I_NEW_OBJ:
+        case I_NEW_ARR:
+        case I_GET_OBJ:
+        case I_NEW_CLS:
+        case I_UNDEFINED:
+        case I_NULL:
+            return inst.i_rd;
+        default:
+            return 0;
+    }
+}
+
+static inline void
+_ir_builder_unuse_register(IRBuilder *builder, size_t reg)
+{
+    Value result = hash_find(builder->register_usage, reg);
+    assert(value_is_int(result));
+    if (value_to_int(result) == 1) {
+        hash_set(
+            builder->register_usage,
+            reg,
+            value_undefined()
+        );
+    }
+    else {
+        hash_set(
+            builder->register_usage,
+            reg,
+            value_from_int(value_to_int(result) - 1)
+        );
+    }
+}
+
+static inline void
+_ir_builder_update_register_usage(IRBuilder *builder)
+{
+    list_for_each_r(&builder->basic_blocks, node) {
+        BasicBlock *bb = list_get(node, BasicBlock, _linked);
+        for (
+            Inst *ptr = bb->inst_list->insts + bb->inst_list->count - 1,
+                 *limit = bb->inst_list->insts - 1;
+            ptr != limit;
+            ptr--
+        ) {
+            size_t result_reg = _ir_builder_result_register(*ptr);
+            if (result_reg) {
+                Value value = hash_find(builder->register_usage, result_reg);
+                if (value_is_undefined(value)) {
+                    switch (ptr->type) {
+                        case I_ADD:
+                        case I_SUB:
+                        case I_MUL:
+                        case I_DIV:
+                        case I_MOD:
+                        case I_SEQ:
+                        case I_SLT:
+                        case I_SLE:
+                        case I_GET_OBJ:
+                            _ir_builder_unuse_register(builder, ptr->i_rs);
+                            _ir_builder_unuse_register(builder, ptr->i_rt);
+                            break;
+                        case I_LNOT:
+                        case I_MOV:
+                            _ir_builder_unuse_register(builder, ptr->i_rs);
+                            break;
+                        case I_LI:
+                        case I_LSTR:
+                        case I_UNDEFINED:
+                        case I_NULL:
+                        case I_NEW_OBJ:
+                        case I_NEW_ARR:
+                        case I_NEW_CLS:
+                            break;
+                        default:
+                            error_f(
+                                "Internal error, meeting inst type %d, reg %d",
+                                ptr->type, 
+                                result_reg
+                            );
+                            return;
+                    }
+                }
+            }
+        }
+    }
+}
+
 InstList *
 ir_builder_destroy(IRBuilder *builder)
 {
+    _ir_builder_update_register_usage(builder);
+
     InstList *ret = inst_list_new(16);
     list_for_each(&builder->basic_blocks, node) {
         BasicBlock *bb = list_get(node, BasicBlock, _linked);
@@ -168,7 +301,16 @@ ir_builder_destroy(IRBuilder *builder)
             ptr != limit;
             ++ptr
         ) {
-            inst_list_push(ret, *ptr);
+            size_t result_reg = _ir_builder_result_register(*ptr);
+            if (!result_reg) {
+                inst_list_push(ret, *ptr);
+            }
+            else {
+                Value value = hash_find(builder->register_usage, result_reg);
+                if (!value_is_undefined(value)) {
+                    inst_list_push(ret, *ptr);
+                }
+            }
         }
 
         if (bb->br_reg) {
@@ -185,6 +327,8 @@ ir_builder_destroy(IRBuilder *builder)
             list_get(list_unlink(list_head(&builder->basic_blocks)), BasicBlock, _linked)
         );
     }
+    hash_destroy(builder->register_usage);
+    free(builder);
 
     return ret;
 }
@@ -203,6 +347,8 @@ ir_builder_br(BasicBlock *bb, size_t rd, BasicBlock *then_bb, BasicBlock *else_b
     bb->br_reg = rd;
     bb->then_bb = then_bb;
     bb->else_bb = else_bb;
+
+    _ir_builder_use_register(bb, rd);
 }
 
 void
@@ -345,6 +491,8 @@ ir_builder_add(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -364,6 +512,8 @@ ir_builder_sub(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -383,6 +533,8 @@ ir_builder_mul(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -402,6 +554,8 @@ ir_builder_div(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -421,6 +575,8 @@ ir_builder_mod(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -440,6 +596,8 @@ ir_builder_seq(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -459,6 +617,8 @@ ir_builder_slt(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -478,6 +638,8 @@ ir_builder_sle(BasicBlock *bb, size_t rs, size_t rt)
             rt
         )
     );
+    _ir_builder_use_register(bb, rs);
+    _ir_builder_use_register(bb, rt);
     return ret;
 }
 
@@ -496,6 +658,7 @@ ir_builder_lnot(BasicBlock *bb, size_t rs)
             0
         )
     );
+    _ir_builder_use_register(bb, rs);
     return ret;
 }
 
@@ -524,6 +687,7 @@ ir_builder_mov(BasicBlock *bb, size_t rs)
         );
     }
 
+    _ir_builder_use_register(bb, rs);
     return ret;
 }
 
@@ -550,6 +714,7 @@ ir_builder_mov_upper(BasicBlock *bb, size_t rd, size_t rs)
             constant
         );
     }
+    _ir_builder_use_register(bb, rs);
 }
 
 size_t
@@ -598,6 +763,9 @@ ir_builder_set_obj(BasicBlock *bb, size_t r_obj, size_t r_val, size_t r_key)
             r_key
         )
     );
+    _ir_builder_use_register(bb, r_obj);
+    _ir_builder_use_register(bb, r_key);
+    _ir_builder_use_register(bb, r_val);
 }
 
 size_t
@@ -615,6 +783,8 @@ ir_builder_get_obj(BasicBlock *bb, size_t r_obj, size_t r_key)
             r_key
         )
     );
+    _ir_builder_use_register(bb, r_obj);
+    _ir_builder_use_register(bb, r_key);
     return ret;
 }
 
@@ -633,6 +803,8 @@ ir_builder_call(BasicBlock *bb, size_t r_func, size_t r_arg)
             r_arg
         )
     );
+    _ir_builder_use_register(bb, r_func);
+    _ir_builder_use_register(bb, r_arg);
     return ret;
 }
 
@@ -649,6 +821,8 @@ ir_builder_ret(BasicBlock *bb, size_t r_val)
             0, 0
         )
     );
+    _ir_builder_use_register(bb, r_val);
+    bb->returned = 1;
 }
 
 size_t
@@ -665,12 +839,19 @@ ir_builder_new_cls(BasicBlock *bb, VMFunction *func)
             (int)func
         )
     );
+
+    hash_for_each(func->capture_list, node) {
+        _ir_builder_use_register(bb, node->key);
+    }
     return ret;
 }
 
 size_t
 ir_builder_undefined(BasicBlock *bb)
 {
+    int constant = _ir_builder_find_in_constant_table(bb, value_undefined());
+    if (constant >= 0) { return (size_t)constant; }
+
     assert_basic_block_not_end(bb);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
@@ -682,12 +863,20 @@ ir_builder_undefined(BasicBlock *bb)
             0, 0
         )
     );
+    hash_set_and_update(
+        bb->constant_table,
+        (uintptr_t)(value_undefined()._int),
+        value_from_int(ret)
+    );
     return ret;
 }
 
 size_t
 ir_builder_null(BasicBlock *bb)
 {
+    int constant = _ir_builder_find_in_constant_table(bb, value_null());
+    if (constant >= 0) { return (size_t)constant; }
+
     assert_basic_block_not_end(bb);
 
     size_t ret = ir_builder_allocate_register(ir_builder_from_bb(bb));
@@ -698,6 +887,11 @@ ir_builder_null(BasicBlock *bb)
             ret,
             0, 0
         )
+    );
+    hash_set_and_update(
+        bb->constant_table,
+        (uintptr_t)(value_null()._int),
+        value_from_int(ret)
     );
     return ret;
 }

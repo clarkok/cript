@@ -780,11 +780,6 @@ _parse_function_literal(ParseState *state)
     assert(tok == '}');
     _lex_next(state);
 
-    ir_builder_ret(
-        function_stack_top(state)->current_bb,
-        ir_builder_undefined(function_stack_top(state)->current_bb)
-    );
-
     VMFunction *func = _parse_pop_function(state);
 
     return ir_builder_new_cls(function_stack_top(state)->current_bb, func);

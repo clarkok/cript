@@ -186,21 +186,17 @@ parse_test(CuTest *tc)
         "a = a + b;\n"
         "b = a - b;\n"
         "a = a - b;\n"
-        "halt;\n"
+        "return [a, b];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    output_vm_state(stdout, vm);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_b)));
+    CuAssertIntEquals(tc, 2, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -212,18 +208,16 @@ parse_complex_test(CuTest *tc)
     static const char TEST_CONTENT[] =
         "let a;\n"
         "a = 1 * 2 / 3 + 4 % (5 + 6);\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 1 * 2 / 3 + 4 % (5 + 6), value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -240,20 +234,17 @@ parse_block_test(CuTest *tc)
         "  b = a + 1;\n"
         "}\n"
         "a = b + 1;\n"
-        "halt;\n"
+        "return [a, b];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 3, value_to_int(get_reg_value_from_vm(vm, reg_a)));
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_b)));
+    CuAssertIntEquals(tc, 3, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 2, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -275,20 +266,17 @@ parse_nested_block_test(CuTest *tc)
         "  b = b + a;\n"
         "}\n"
         "b = b + a;\n"
-        "halt;\n"
+        "return [a, b];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_a)));
-    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_b)));
+    CuAssertIntEquals(tc, 0, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 4, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -302,18 +290,16 @@ parse_if_true_test(CuTest *tc)
         "if (1) {\n"
         "  a = 1;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 1, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -327,18 +313,16 @@ parse_if_false_test(CuTest *tc)
         "if (0) {\n"
         "  a = 1;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 0, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -355,18 +339,16 @@ parse_if_else_true_test(CuTest *tc)
         "else {\n"
         "  a = 2;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 1, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -383,18 +365,16 @@ parse_if_else_false_test(CuTest *tc)
         "else {\n"
         "  a = 2;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 2, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -412,18 +392,16 @@ parse_nested_if_test(CuTest *tc)
         "  }\n"
         "  else a = 3;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 2, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -439,18 +417,16 @@ parse_nested_if_test_buggy1(CuTest *tc)
         "  if (a) a = 2;\n"
         "  else a = 3;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 2, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -464,18 +440,16 @@ parse_while_test(CuTest *tc)
         "while (a) {\n"
         "  a = a - 1;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 0, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -489,18 +463,16 @@ parse_compare_expr_test(CuTest *tc)
         "while (a > 5) {\n"
         "  a = a - 1;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 5, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -513,22 +485,18 @@ parse_logic_and_expr_test(CuTest *tc)
         "let a = 1 && 2 && 3 && 4 && 5 && 6;\n"
         "let b = 5 && 4 && 3 && 2 && 1 && 0;\n"
         "let c = 1 && 2 && 0 && 3 && 4;\n"
-        "halt;\n"
+        "return [a, b, c];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-    intptr_t reg_c = get_reg_from_parse_state(state, "c");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 6, value_to_int(get_reg_value_from_vm(vm, reg_a)));
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_b)));
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_c)));
+    CuAssertIntEquals(tc, 6, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 0, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
+    CuAssertIntEquals(tc, 0, value_to_int(hash_find(value_to_ptr(ret_val), 2)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -541,22 +509,18 @@ parse_logic_or_expr_test(CuTest *tc)
         "let a = 1 || 2 || 3 || 4 || 5 || 6;\n"
         "let b = 0 || 0 || 1 || 2;\n"
         "let c = 0 || 0 || 0;\n"
-        "halt;\n"
+        "return [a, b, c];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-    intptr_t reg_c = get_reg_from_parse_state(state, "c");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_a)));
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_b)));
-    CuAssertIntEquals(tc, 0, value_to_int(get_reg_value_from_vm(vm, reg_c)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
+    CuAssertIntEquals(tc, 0, value_to_int(hash_find(value_to_ptr(ret_val), 2)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -575,18 +539,16 @@ parse_fibonacci_test(CuTest *tc)
         "    b = t;\n"
         "    n = n - 1;\n"
         "}\n"
-        "halt;\n"
+        "return a;\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 89, value_to_int(get_reg_value_from_vm(vm, reg_a)));
+    CuAssertIntEquals(tc, 89, value_to_int(ret_val));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -598,25 +560,22 @@ parse_string_test(CuTest *tc)
     static const char TEST_CONTENT[] =
         "let a = 'hello world';\n"
         "let b = \"hello world!\";\n"
-        "halt;\n"
+        "return [a, b];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_a = get_reg_from_parse_state(state, "a");
-    intptr_t reg_b = get_reg_from_parse_state(state, "b");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
     CString *string;
 
-    string = value_to_string(get_reg_value_from_vm(vm, reg_a));
+    string = value_to_string(hash_find(value_to_ptr(ret_val), 0));
     CuAssertTrue(tc, string->length);
     CuAssertIntEquals(tc, 0, strncmp("hello world", string->content, string->length));
 
-    string = value_to_string(get_reg_value_from_vm(vm, reg_b));
+    string = value_to_string(hash_find(value_to_ptr(ret_val), 1));
     CuAssertTrue(tc, string->length);
     CuAssertIntEquals(tc, 0, strncmp("hello world!", string->content, string->length));
 
@@ -636,20 +595,17 @@ parse_object_test(CuTest *tc)
         "let c = {c : 3};\n"
         "let d = b.a;\n"
         "let e = b['b'];\n"
-        "halt;\n"
+        "return [d, e];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_d = get_reg_from_parse_state(state, "d");
-    intptr_t reg_e = get_reg_from_parse_state(state, "e");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_d)));
-    CuAssertIntEquals(tc, 2, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 2, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -670,20 +626,17 @@ parse_object_set_test(CuTest *tc)
         "let d = c.c;\n"
         "c['c'] = 5;\n"
         "let e = c.c;\n"
-        "halt;\n"
+        "return [d, e];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_d = get_reg_from_parse_state(state, "d");
-    intptr_t reg_e = get_reg_from_parse_state(state, "e");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_d)));
-    CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+    CuAssertIntEquals(tc, 4, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 5, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -730,20 +683,17 @@ parse_array_test(CuTest *tc)
         "let c = [3 : 1];\n"
         "let d = b[0];\n"
         "let e = c[3];\n"
-        "halt;\n"
+        "return [d, e];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_d = get_reg_from_parse_state(state, "d");
-    intptr_t reg_e = get_reg_from_parse_state(state, "e");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_d)));
-    CuAssertIntEquals(tc, 1, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 1, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -764,20 +714,17 @@ parse_array_set_test(CuTest *tc)
         "let d = c[1];\n"
         "c[1] = 5;\n"
         "let e = c[1];\n"
-        "halt;\n"
+        "return [d, e];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_d = get_reg_from_parse_state(state, "d");
-    intptr_t reg_e = get_reg_from_parse_state(state, "e");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_d)));
-    CuAssertIntEquals(tc, 5, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+    CuAssertIntEquals(tc, 4, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 5, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -799,20 +746,17 @@ parse_nested_block_buggy_test(CuTest *tc)
         "}\n"
         "let d = b + a;\n"
         "let e = a;\n"
-        "halt;\n"
+        "return [d, e];\n"
     ;
 
     ParseState *state = parse_state_new_from_string(TEST_CONTENT);
     parse(state);
 
-    intptr_t reg_d = get_reg_from_parse_state(state, "d");
-    intptr_t reg_e = get_reg_from_parse_state(state, "e");
-
     VMState *vm = cvm_state_new_from_parse_state(state);
-    cvm_state_run(vm);
+    Value ret_val = cvm_state_run(vm);
 
-    CuAssertIntEquals(tc, 7, value_to_int(get_reg_value_from_vm(vm, reg_d)));
-    CuAssertIntEquals(tc, 4, value_to_int(get_reg_value_from_vm(vm, reg_e)));
+    CuAssertIntEquals(tc, 7, value_to_int(hash_find(value_to_ptr(ret_val), 0)));
+    CuAssertIntEquals(tc, 4, value_to_int(hash_find(value_to_ptr(ret_val), 1)));
 
     cvm_state_destroy(vm);
     parse_state_destroy(state);
@@ -836,6 +780,7 @@ parse_function_parse_test(CuTest *tc)
     parse(state);
 
     VMState *vm = cvm_state_new_from_parse_state(state);
+    output_vm_state(stdout, vm);
     Value ret_val = cvm_state_run(vm);
 
     CuAssertIntEquals(tc, 1, value_to_int(ret_val));

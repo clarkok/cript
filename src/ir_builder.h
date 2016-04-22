@@ -23,6 +23,7 @@ typedef struct BasicBlock
     size_t br_reg;
     Hash *constant_table;
     Hash *numeric_value;
+    int returned;
     struct BasicBlock *then_bb;
     struct BasicBlock *else_bb;
 } BasicBlock;
@@ -30,6 +31,7 @@ typedef struct BasicBlock
 typedef struct IRBuilder
 {
     size_t register_nr;
+    Hash *register_usage;
     LinkedList basic_blocks;
 } IRBuilder;
 
