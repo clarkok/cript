@@ -225,7 +225,7 @@ _lex_peak(ParseState *state)
         if (isdigit(*(state->current))) {
             _lex_parse_number(state);
         }
-        else if (isalpha(*(state->current))) {
+        else if (isalpha(*(state->current)) || *(state->current) == '_') {
             _lex_parse_identifier(state);
         }
         else if (*(state->current) == '"' || *(state->current) == '\'') {

@@ -1,4 +1,4 @@
-global.print("Test equal ...");
+global.print("Test equal... ");
 
 let assert = global.import('./assert.cr');
 

@@ -1,4 +1,4 @@
-global.print('Test typeof ...');
+global.print('Test typeof... ');
 
 let assert = global.import('./assert.cr');
 

@@ -107,7 +107,7 @@ _lib_import(VMState *vm, Value value)
         }
         else {
             strcpy(path_buffer, cript_root);
-            strcpy(path_buffer, path->content);
+            strcat(path_buffer, path->content);
             state = parse_state_expand_from_file(vm, path_buffer);
         }
     }

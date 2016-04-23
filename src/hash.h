@@ -74,7 +74,7 @@ typedef struct Hash
 
 #define hash_capacity(hash)         ((hash)->capacity)
 #define hash_size(hash)             ((hash)->size)
-#define hash_need_expand(hash)      (hash_size(hash) > (hash_capacity(hash) - ((hash_capacity(hash) >> 2))))
+#define hash_need_expand(hash)      (hash_size(hash) > (hash_capacity(hash) - (hash_capacity(hash) >> 2)))
 #define hash_need_shrink(hash)      (hash_capacity(hash) > HASH_MIN_CAPACITY &&     \
                                      hash_size(hash) < (hash_capacity(hash) >> 1))
 
