@@ -48,7 +48,7 @@ warn_handle_f(const char *file, int line, const char *fmt, ...)
 void
 info_handle(const char *file, int line, const char *msg)
 {
-    fprintf(stdout, "INFO: %s\n    thrown at %s:%d\n\n", msg, file, line);
+    // fprintf(stdout, "INFO: %s\n    thrown at %s:%d\n\n", msg, file, line);
 }
 
 void

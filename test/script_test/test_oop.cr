@@ -18,7 +18,7 @@ let Student = function (name, age) {
 
 let student = Student('Clarkok Zhang', 20);
 
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 assert.assertStringEq('Clarkok Zhang', student.getName());
 assert.assertIntEq(20, student.getAge());

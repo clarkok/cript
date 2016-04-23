@@ -1,7 +1,7 @@
 global.print('Test sizeof... ');
 
 let sizeof = global.sizeof;
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 assert.assertIntEq(-1, sizeof(1));
 assert.assertIntEq(5, sizeof("12345"));

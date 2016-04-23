@@ -1,6 +1,6 @@
 global.print('Test concat ...');
 
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 let a = 'hello';
 let b = 'world';

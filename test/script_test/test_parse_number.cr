@@ -1,6 +1,6 @@
 global.print('Test parse_number... ');
 
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 let i = 0;
 while (i < 10) {

@@ -9,4 +9,6 @@
 
 #define USE_COMPUTED_GOTO   0
 
+#define CRIPT_ROOT  "CRIPT_ROOT"
+
 #endif //CRIPT_CRIPT_H

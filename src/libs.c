@@ -5,6 +5,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "cript.h"
 #include "error.h"
 #include "libs.h"
 
@@ -93,7 +94,23 @@ _lib_import(VMState *vm, Value value)
 {
     Hash *args = _lib_get_hash_from_value(value);
     CString *path = value_to_string(hash_find(args, 1));
-    ParseState *state = parse_state_expand_from_file(vm, path->content);
+    char path_buffer[512];
+
+    ParseState *state;
+    if (path->content[0] == '.') {
+        state = parse_state_expand_from_file(vm, path->content);
+    }
+    else {
+        const char *cript_root = getenv(CRIPT_ROOT);
+        if (!cript_root) {
+            state = parse_state_expand_from_file(vm, path->content);
+        }
+        else {
+            strcpy(path_buffer, cript_root);
+            strcpy(path_buffer, path->content);
+            state = parse_state_expand_from_file(vm, path_buffer);
+        }
+    }
     parse(state);
     Value ret = cvm_state_import_from_parse_state(vm, state);
     parse_state_destroy(state);

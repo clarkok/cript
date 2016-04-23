@@ -1,6 +1,6 @@
 global.print('Test typeof ...');
 
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 let int = 1;
 let str = 'string';

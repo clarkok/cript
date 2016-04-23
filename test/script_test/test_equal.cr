@@ -1,6 +1,6 @@
 global.print("Test equal ...");
 
-let assert = global.import('assert.cr');
+let assert = global.import('./assert.cr');
 
 assert.assert(1 == 1);
 assert.assert("test" == "test");
