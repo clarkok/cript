@@ -173,14 +173,6 @@ cvm_state_new_from_parse_state(ParseState *state)
 
     list_move(&vm->functions, &state->functions);
     VMFunction *main_function = parse_get_main_function(state);
-    inst_list_push(
-        main_function->inst_list,
-        cvm_inst_new_d_type(
-            I_HALT,
-            0, 0, 0
-        )
-    );
-
     list_prepend(&vm->functions, &main_function->_linked);
 
     cvm_state_push_frame(vm, main_function);
@@ -198,13 +190,6 @@ cvm_state_import_from_parse_state(VMState *vm, ParseState *state)
         list_append(&vm->functions, list_unlink(list_head(&state->functions)));
     }
     VMFunction *main_function = parse_get_main_function(state);
-    inst_list_push(
-        main_function->inst_list,
-        cvm_inst_new_d_type(
-            I_HALT,
-            0, 0, 0
-        )
-    );
     list_prepend(&vm->functions, &main_function->_linked);
 
     cvm_state_push_frame(vm, main_function);
@@ -235,14 +220,6 @@ cvm_state_new(InstList *main_inst_list, StringPool *string_pool)
 
     main_function->inst_list = main_inst_list;
     if (!main_inst_list)    main_function->inst_list = inst_list_new(16);
-    inst_list_push(
-        main_function->inst_list,
-        cvm_inst_new_d_type(
-            I_HALT,
-            0, 0, 0
-        )
-    );
-
     list_prepend(&vm->functions, &main_function->_linked);
 
     cvm_state_push_frame(vm, main_function);

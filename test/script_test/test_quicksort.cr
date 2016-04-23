@@ -1,6 +1,6 @@
 global.print('Test quicksort... ');
 
-let n = 1000;
+let n = 100000;
 let array = [];
 let i = 0;
 
@@ -11,6 +11,8 @@ while (i < n) {
     count[array[i]] = (count[array[i]] || 0) + 1;
     i = i + 1;
 }
+
+global.println('complete create array');
 
 let export = {};
 
@@ -43,20 +45,32 @@ export.partition = function (arr, lo, hi) {
 
 export.quicksort(array, 0, n - 1, 0);
 
+global.println('complete quicksort');
+
 let assert = global.import('assert.cr');
 i = 1;
 assert.assert(count[array[0]]);
 count[array[0]] = count[array[0]] - 1;
 while (i < n) {
-    assert.assert(array[i - 1] <= array[i], global.concat('error on ', global.to_string(i)));
+    assert.assert(
+        array[i - 1] <= array[i],
+        function () { return global.concat('error on ', global.to_string(i)); }
+    );
     assert.assert(count[array[i]]);
     count[array[i]] = count[array[i]] - 1;
     i = i + 1;
 }
 
+global.println('complete order compare');
+
 i = 0;
 while (i < n) {
-    assert.assert(!count[array[i]], global.concat('number ', global.to_string(array[i]), ' is ', global.to_string(i)));
+    assert.assert(
+        !count[array[i]],
+        function () {
+            return global.concat('number ', global.to_string(array[i]), ' is ', global.to_string(i));
+        }
+    );
     i = i + 1;
 }
 

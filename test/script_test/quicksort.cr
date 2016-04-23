@@ -5,10 +5,14 @@ let n = 1000000;
 let array = [];
 let i = 0;
 
+let current_clock = global.clock();
+
 while (i < n) {
     array[i] = global.random() % n + n;
     i = i + 1;
 }
+
+global.println('create array: ', global.clock() - current_clock);
 
 let output_array = function (array) {
     global.foreach(array, function (x) {
@@ -48,5 +52,9 @@ export.partition = function (arr, lo, hi) {
     return i;
 };
 
+current_clock = global.clock();
+
 export.quicksort(array, 0, n - 1, 0);
 // output_array(array);
+
+global.println('quicksort: ', global.clock() - current_clock);

@@ -3,6 +3,7 @@
 //
 
 #include <math.h>
+#include <time.h>
 
 #include "error.h"
 #include "libs.h"
@@ -116,8 +117,9 @@ _lib_concat(VMState *vm, Value value)
             break;
         }
     }
+    *ptr = 0;
 
-    return value_from_string(string_pool_insert_vec(&vm->string_pool, buffer, ptr - buffer));
+    return cvm_get_cstring_value(vm, buffer);
 }
 
 static Value
@@ -244,6 +246,10 @@ _lib_char_code_at(VMState *vm, Value value)
     return value_from_int(string->content[index]);
 }
 
+static Value
+_lib_clock(VMState *vm, Value value)
+{ return value_from_int(clock()); }
+
 void
 lib_register(VMState *vm)
 {
@@ -252,6 +258,7 @@ lib_register(VMState *vm)
 
     register_function(vm, _lib_char_at, "char_at");
     register_function(vm, _lib_char_code_at, "char_code_at");
+    register_function(vm, _lib_clock, "clock");
     register_function(vm, _lib_concat, "concat");
     register_function(vm, _lib_foreach, "foreach");
     register_function(vm, _lib_import, "import");

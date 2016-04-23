@@ -3,6 +3,7 @@ let export = {};
 export.assert = function (cond, msg) {
     msg = msg || '';
     if (!cond) {
+        if (global.typeof(msg) == 'closure') { msg = msg(); }
         global.println('Assert Failed! ', msg);
         halt;
     }
@@ -17,13 +18,16 @@ export.assertTypeof = function (expected, actual, msg) {
 
     export.assert(
         global.typeof(actual) == expected,
-        global.concat(
-            msg,
-            ' expected type:',
-            expected,
-            ' but actual type: ',
-            global.typeof(actual)
-        )
+        function () {
+            if (global.typeof(msg) == 'closure') { msg = msg(); }
+            return global.concat(
+                msg,
+                ' expected type:',
+                expected,
+                ' but actual type: ',
+                global.typeof(actual)
+            );
+        }
     );
 };
 
@@ -34,13 +38,16 @@ export.assertIntEq = function (expected, actual, msg) {
 
     export.assert(
         expected == actual, 
-        global.concat(
-            msg,
-            ' expect: ',
-            global.to_string(expected),
-            ' but actual: ',
-            global.to_string(actual)
-        )
+        function () {
+            if (global.typeof(msg) == 'closure') { msg = msg(); }
+            return global.concat(
+                msg,
+                ' expect: ',
+                global.to_string(expected),
+                ' but actual: ',
+                global.to_string(actual)
+            );
+        }
     );
 };
 
@@ -51,14 +58,17 @@ export.assertStringEq = function (expected, actual, msg) {
 
     export.assert(
         expected == actual,
-        global.concat(
-            msg,
-            ' expect: "',
-            expected,
-            '" but actual: "',
-            actual,
-            '"'
-        )
+        function () {
+            if (global.typeof(msg) == 'closure') { msg = msg(); }
+            return global.concat(
+                msg,
+                ' expect: "',
+                expected,
+                '" but actual: "',
+                actual,
+                '"'
+            );
+        }
     );
 };
 

@@ -65,12 +65,12 @@ _string_expand_size(size_t original_capacity)
 
 static inline int
 _string_hash_need_expand(size_t size, size_t capacity)
-{ return size > (capacity - (capacity >> 1)); }
+{ return size > (capacity >> 1); }
 
 static inline void
 _string_hash_insert(StringPool *pool, uintptr_t key, CString *string)
 {
-    uintptr_t index = key % pool->capacity;
+    uintptr_t index = key & (pool->capacity - 1);
     StringNode *node = NULL;
 
     while ((node = pool->content + index)->string) {
@@ -85,6 +85,7 @@ static inline StringPage *
 _new_string_page()
 {
     StringPage *ret = (StringPage*)malloc(STRING_PAGE_SIZE);
+    assert(ret);
     list_node_init(&ret->_linked);
     ret->allocated = sizeof(StringPage);
     return ret;
@@ -96,7 +97,9 @@ _new_string_page()
 static inline StringPool *
 _string_pool_construct(size_t capacity)
 {
+    assert(1 << __builtin_ctz(capacity) == capacity);
     StringPool *ret = (StringPool*)malloc(_string_pool_size(capacity));
+    assert(ret);
 
     list_init(&ret->string_pages);
     ret->capacity = capacity;
@@ -126,7 +129,6 @@ StringPool *
 _string_expand_pool(StringPool *original)
 {
     StringPool *ret = _string_pool_construct(_string_expand_size(original->capacity));
-
     list_move(&ret->string_pages, &original->string_pages);
 
     StringNode *node = original->content,
@@ -134,6 +136,7 @@ _string_expand_pool(StringPool *original)
     for (; node != limit; ++node) {
         if (node->string) {
             _string_hash_insert(ret, node->key, node->string);
+            ret->size++;
         }
     }
 
@@ -145,7 +148,7 @@ CString *
 _string_pool_find_hash(const StringPool *pool, const char *vec, size_t size, uintptr_t hash)
 {
     const StringNode *node = NULL;
-    uintptr_t index = hash % pool->capacity;
+    uintptr_t index = hash & (pool->capacity - 1);
     while ((node = pool->content + index)->string) {
         if (node->key == hash && size == node->string->length && !memcmp(vec, node->string->content, size)) {
             return node->string;
@@ -171,14 +174,14 @@ _string_allocate_in_pool(StringPool *pool, size_t size)
         list_prepend(&pool->string_pages, &page->_linked);
     }
     CString *ret = (CString*)((char *)page + page->allocated);
-    page->allocated += (size + sizeof(CString) + sizeof(size_t)) & -sizeof(size_t); // for alignment
+    page->allocated += (size + sizeof(CString) + sizeof(size_t) - 1) & -sizeof(size_t); // for alignment
     return ret;
 }
 
 CString *
 string_pool_insert_vec(StringPool **pool_ptr, const char *vec, size_t size)
 {
-    assert(size < MAX_SHORT_STRING_LENGTH);
+    assert(size <= MAX_SHORT_STRING_LENGTH - 1);
 
     StringPool *pool = *pool_ptr;
     uintptr_t hash = string_hash_vec(vec, size);
