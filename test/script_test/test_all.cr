@@ -5,4 +5,5 @@ global.import('./test_parse_number.cr');
 global.import('./test_sizeof.cr');
 global.import('./test_typeof.cr');
 global.import('./test_root.cr');
+global.import('./test_iterator.cr');
 global.import('./test_quicksort.cr');
