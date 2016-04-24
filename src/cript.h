@@ -5,7 +5,7 @@
 #ifndef CRIPT_CRIPT_H
 #define CRIPT_CRIPT_H
 
-#define CRIPT_VERSION "0.2.0"
+#define CRIPT_VERSION "0.3.0"
 
 #define USE_COMPUTED_GOTO   0
 
