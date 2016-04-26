@@ -13,7 +13,7 @@ endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
-set(LIB_SRC_FILES src/cript.h src/cvm.c src/cvm.h src/list.h src/error.c src/error.h src/value.c src/value.h src/hash.c src/hash.h src/string_pool.c src/string_pool.h src/hash_helper.h src/inst.h src/inst_list.c src/inst_list.h src/parse.c src/parse.h src/parse_internal.h src/inst_output.h src/inst_output.c src/young_gen.h src/young_gen.c src/hash_internal.h src/libs.c src/libs.h src/ir_builder.h src/ir_builder.c)
+set(LIB_SRC_FILES src/cript.h src/cvm.c src/cvm.h src/list.h src/error.c src/error.h src/value.c src/value.h src/hash.c src/hash.h src/string_pool.c src/string_pool.h src/hash_helper.h src/inst.h src/inst_list.c src/inst_list.h src/parse.c src/parse.h src/parse_internal.h src/inst_output.h src/inst_output.c src/young_gen.h src/young_gen.c src/hash_internal.h src/libs.c src/libs.h src/ir_builder.h src/ir_builder.c src/gc.c src/gc.h src/young_gc.c src/young_gc.h src/data_gc.c src/data_gc.h src/large_gc.c src/large_gc.h src/old_gc.c src/old_gc.h)
 set(SOURCE_FILES src/cript.c)
 
 add_library(libcript ${LIB_SRC_FILES})

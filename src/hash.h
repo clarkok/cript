@@ -81,8 +81,8 @@ typedef struct Hash
 #define hash_set_and_update(hash, key, value)                                                               \
     do {                                                                                                    \
         hash_set((hash), (uintptr_t)key, value);                                                            \
-        if (hash_need_expand(hash)) { Hash *old = hash; (hash) = hash_expand(hash); hash_destroy(old); }    \
-        if (hash_need_shrink(hash)) { Hash *old = hash; (hash) = hash_shrink(hash); hash_destroy(old); }    \
+        if (hash_need_expand(hash)) { Hash *__old = hash; (hash) = hash_expand(hash); hash_destroy(__old); }    \
+        if (hash_need_shrink(hash)) { Hash *__old = hash; (hash) = hash_shrink(hash); hash_destroy(__old); }    \
     } while (0)
 
 #define hash_for_each(hash, node)                               \
